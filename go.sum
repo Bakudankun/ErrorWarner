@@ -1,5 +1,7 @@
 github.com/200sc/klangsynthese v0.1.0 h1:wCo0dpFba9ED9CrRhNBXn3LHLOkChVSwu+trjph+354=
 github.com/200sc/klangsynthese v0.1.0/go.mod h1:1yEA6LmYbsEoAPJx+JN+UQk7k5yXebfWsuM1yGPK/3s=
+github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
+github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/eaburns/bit v0.0.0-20131029213740-7bd5cd37375d h1:HB5J9+f1xpkYLgWQ/RqEcbp3SEufyOIMYLoyKNKiG7E=
 github.com/eaburns/bit v0.0.0-20131029213740-7bd5cd37375d/go.mod h1:CHkHWWZ4kbGY6jEy1+qlitDaCtRgNvCOQdakj/1Yl/Q=
 github.com/eaburns/flac v0.0.0-20171003200620-9a6fb92396d1 h1:wl/ggSfTHqAy46hyzw1IlrUYwjqmXYvbJyPdH3rT7YE=

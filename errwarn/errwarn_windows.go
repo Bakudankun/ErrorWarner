@@ -2,25 +2,46 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
-	"github.com/200sc/klangsynthese"
-	"github.com/200sc/klangsynthese/audio"
-	"github.com/shibukawa/configdir"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"time"
+
+	"github.com/200sc/klangsynthese"
+	"github.com/200sc/klangsynthese/audio"
+	"github.com/BurntSushi/toml"
+	"github.com/shibukawa/configdir"
+)
+
+type Config struct {
+	ErrFormat  string `toml:"errfmt"`
+	WarnFormat string `toml:"warnfmt"`
+}
+
+const (
+	configFileName string = "config.toml"
 )
 
 var (
-	errFile   string
-	warnFile  string
-	errAudio  audio.Audio
-	warnAudio audio.Audio
+	errFile       string
+	warnFile      string
+	errAudio      audio.Audio
+	warnAudio     audio.Audio
+	defaultConfig Config = Config{
+		ErrFormat:  `(?i:error)`,
+		WarnFormat: `(?i:warn)`,
+	}
+	config Config = defaultConfig
 )
 
 func init() {
+	errfmt := flag.String("errfmt", "", "Regexp which matches errors")
+	warnfmt := flag.String("warnfmt", "", "Regexp which matches warnings")
+	flag.Parse()
+
 	configDirs := configdir.New("", "errorwarner").QueryFolders(configdir.Global)
 
 	if len(configDirs) <= 0 {
@@ -35,6 +56,17 @@ func init() {
 
 	errFile = searchAudioFile(*configDir, "error")
 	warnFile = searchAudioFile(*configDir, "warn")
+
+	if configDir.Exists(configFileName) {
+		toml.DecodeFile(filepath.Join(configDir.Path, configFileName), &config)
+	}
+
+	if *errfmt != "" {
+		config.ErrFormat = *errfmt
+	}
+	if *warnfmt != "" {
+		config.WarnFormat = *warnfmt
+	}
 }
 
 func main() {
@@ -43,21 +75,24 @@ func main() {
 
 	var cmd *exec.Cmd
 
-	switch nArgs := len(os.Args) - 1; {
+	switch nArgs := flag.NArg(); {
 	case nArgs <= 0:
 		return
 
 	case nArgs == 1:
-		cmd = exec.Command(os.Args[1])
+		cmd = exec.Command(flag.Arg(0))
 
 	case nArgs > 1:
-		cmd = exec.Command(os.Args[1], os.Args[2:]...)
+		cmd = exec.Command(flag.Arg(0), flag.Args()[1:]...)
 	}
 
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 
 	stderr, _ := cmd.StderrPipe()
+
+	matcherErr, _ := regexp.Compile(config.ErrFormat)
+	matcherWarn, _ := regexp.Compile(config.WarnFormat)
 
 	timer := time.NewTimer(0)
 	scanner := bufio.NewScanner(stderr)
@@ -68,9 +103,9 @@ func main() {
 		line := scanner.Text()
 		fmt.Fprintln(os.Stderr, line)
 
-		matcherErr := regexp.MustCompile(`(?i:error)`)
-		matcherWarn := regexp.MustCompile(`(?i:warn)`)
-		if !matcherErr.MatchString(line) && !matcherWarn.MatchString(line) {
+		isErr := matcherErr != nil && matcherErr.MatchString(line)
+		isWarn := matcherWarn != nil && matcherWarn.MatchString(line)
+		if !isErr && !isWarn {
 			continue
 		}
 
@@ -84,12 +119,12 @@ func main() {
 		var newAudio *audio.Audio
 
 		switch {
-		case matcherErr.MatchString(line):
+		case isErr:
 			if errAudio != nil {
 				newAudio = &errAudio
 			}
 
-		case matcherWarn.MatchString(line):
+		case isWarn:
 			if warnAudio != nil {
 				newAudio = &warnAudio
 			}
