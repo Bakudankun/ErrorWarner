@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+/errwarn/errwarn
 
 # Test binary, build with `go test -c`
 *.test
