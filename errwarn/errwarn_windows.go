@@ -40,8 +40,6 @@ func init() {
 func main() {
 	errAudio, _ = klangsynthese.LoadFile(errFile)
 	warnAudio, _ = klangsynthese.LoadFile(warnFile)
-	var nowPlaying *audio.Audio
-	var playing <-chan error
 
 	var cmd *exec.Cmd
 
@@ -61,6 +59,7 @@ func main() {
 
 	stderr, _ := cmd.StderrPipe()
 
+	timer := time.NewTimer(0)
 	scanner := bufio.NewScanner(stderr)
 
 	cmd.Start()
@@ -71,36 +70,45 @@ func main() {
 
 		matcherErr := regexp.MustCompile(`(?i:error)`)
 		matcherWarn := regexp.MustCompile(`(?i:warn)`)
-		if matcherErr.MatchString(line) || matcherWarn.MatchString(line) {
-
-			if nowPlaying != nil {
-				(*nowPlaying).Stop()
-			}
-
-			var newPlaying audio.Audio
-			var err error
-			switch {
-			case matcherErr.MatchString(line):
-				newPlaying, err = errAudio.Copy()
-
-			case matcherWarn.MatchString(line):
-				newPlaying, err = warnAudio.Copy()
-			}
-
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				nowPlaying = nil
-				continue
-			}
-
-			playing = newPlaying.Play()
-			nowPlaying = &newPlaying
-
-			time.Sleep(50 * time.Millisecond)
+		if !matcherErr.MatchString(line) && !matcherWarn.MatchString(line) {
+			continue
 		}
+
+		if errAudio != nil {
+			errAudio.Stop()
+		}
+		if warnAudio != nil {
+			warnAudio.Stop()
+		}
+
+		var newAudio *audio.Audio
+
+		switch {
+		case matcherErr.MatchString(line):
+			if errAudio != nil {
+				newAudio = &errAudio
+			}
+
+		case matcherWarn.MatchString(line):
+			if warnAudio != nil {
+				newAudio = &warnAudio
+			}
+		}
+
+		if newAudio == nil {
+			continue
+		}
+
+		(*newAudio).Play()
+
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset((*newAudio).PlayLength())
+		time.Sleep(50 * time.Millisecond)
 	}
 
-	<-playing
+	<-timer.C
 }
 
 func searchAudioFile(configDir configdir.Config, basename string) (path string) {
