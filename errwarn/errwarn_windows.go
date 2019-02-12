@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"syscall"
 	"time"
 
 	"github.com/200sc/klangsynthese"
@@ -144,6 +145,19 @@ func main() {
 	}
 
 	<-timer.C
+
+	err := cmd.Wait()
+
+	var exitStatus int
+	if err == nil {
+		exitStatus = 0
+	} else if exitErr, ok := err.(*exec.ExitError); ok {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+			exitStatus = status.ExitStatus()
+		}
+	}
+
+	os.Exit(exitStatus)
 }
 
 func searchAudioFile(configDir configdir.Config, basename string) (path string) {
