@@ -2,24 +2,33 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/200sc/klangsynthese"
 	"github.com/200sc/klangsynthese/audio"
 	"github.com/BurntSushi/toml"
+	"github.com/imdario/mergo"
 	"github.com/shibukawa/configdir"
 )
 
 type Config struct {
+	Options map[string]Setting `toml:"option"`
+}
+
+type Setting struct {
 	ErrFormat  string `toml:"errfmt"`
 	WarnFormat string `toml:"warnfmt"`
+	ErrSound   string `toml:"errsound"`
+	WarnSound  string `toml:"warnsound"`
 }
 
 const (
@@ -27,52 +36,50 @@ const (
 )
 
 var (
-	errFile       string
-	warnFile      string
-	errAudio      audio.Audio
-	warnAudio     audio.Audio
-	defaultConfig Config = Config{
+	errAudio       audio.Audio
+	warnAudio      audio.Audio
+	setting        Setting
+	defaultSetting Setting = Setting{
 		ErrFormat:  `(?i:error)`,
 		WarnFormat: `(?i:warn)`,
+		ErrSound:   "",
+		WarnSound:  "",
 	}
-	config Config = defaultConfig
 )
 
 func init() {
+	opt := flag.String("opt", "", "Option described in config")
 	errfmt := flag.String("errfmt", "", "Regexp which matches errors")
 	warnfmt := flag.String("warnfmt", "", "Regexp which matches warnings")
 	flag.Parse()
 
-	configDirs := configdir.New("", "errorwarner").QueryFolders(configdir.Global)
-
-	if len(configDirs) <= 0 {
-		return
+	option := *opt
+	if option == "" {
+		option = strings.TrimSuffix(filepath.Base(flag.Arg(0)), ".exe")
 	}
 
-	configDir := configDirs[0]
-	if !configDir.Exists("") {
-		configDir.MkdirAll()
-		return
-	}
+	if err := getSetting(option); err != nil {
+		if *opt == "" {
+			err = getSetting("")
+		}
 
-	errFile = searchAudioFile(*configDir, "error")
-	warnFile = searchAudioFile(*configDir, "warn")
-
-	if configDir.Exists(configFileName) {
-		toml.DecodeFile(filepath.Join(configDir.Path, configFileName), &config)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	}
 
 	if *errfmt != "" {
-		config.ErrFormat = *errfmt
+		setting.ErrFormat = *errfmt
 	}
 	if *warnfmt != "" {
-		config.WarnFormat = *warnfmt
+		setting.WarnFormat = *warnfmt
 	}
 }
 
 func main() {
-	errAudio, _ = klangsynthese.LoadFile(errFile)
-	warnAudio, _ = klangsynthese.LoadFile(warnFile)
+	errAudio, _ = klangsynthese.LoadFile(setting.ErrSound)
+	warnAudio, _ = klangsynthese.LoadFile(setting.WarnSound)
 
 	var cmd *exec.Cmd
 
@@ -92,8 +99,8 @@ func main() {
 
 	stderr, _ := cmd.StderrPipe()
 
-	matcherErr, _ := regexp.Compile(config.ErrFormat)
-	matcherWarn, _ := regexp.Compile(config.WarnFormat)
+	matcherErr, _ := regexp.Compile(setting.ErrFormat)
+	matcherWarn, _ := regexp.Compile(setting.WarnFormat)
 
 	timer := time.NewTimer(0)
 	scanner := bufio.NewScanner(stderr)
@@ -162,11 +169,57 @@ func main() {
 
 func searchAudioFile(configDir configdir.Config, basename string) (path string) {
 	for _, ext := range []string{".wav", ".flac", ".mp3"} {
-		filename := basename + ext
-		if configDir.Exists(filename) {
+		if filename := basename + ext; configDir.Exists(filename) {
 			return filepath.Join(configDir.Path, filename)
 		}
 	}
 
 	return ""
+}
+
+func getSetting(name string) error {
+	setting = defaultSetting
+
+	configDirs := configdir.New("", "ErrorWarner").QueryFolders(configdir.Global)
+
+	if len(configDirs) <= 0 {
+		return errors.New("Unknown Error, probably not my fault.")
+	}
+
+	configDir := configDirs[0]
+	if !configDir.Exists("") {
+		configDir.MkdirAll()
+	}
+
+	if name != "" {
+		if !configDir.Exists(configFileName) {
+			return errors.New("Config file not found.")
+		}
+
+		var config Config
+
+		if _, err := toml.DecodeFile(filepath.Join(configDir.Path, configFileName), &config); err != nil {
+			return err
+		}
+
+		if option, ok := config.Options[name]; !ok {
+			return errors.New("Specified option does not exist.")
+		} else {
+			mergo.Merge(&setting, option, mergo.WithOverride)
+		}
+	}
+
+	if setting.ErrSound == "" {
+		setting.ErrSound = searchAudioFile(*configDir, "error")
+	} else if !filepath.IsAbs(setting.ErrSound) {
+		setting.ErrSound = filepath.Join(configDir.Path, setting.ErrSound)
+	}
+
+	if setting.WarnSound == "" {
+		setting.WarnSound = searchAudioFile(*configDir, "warn")
+	} else if !filepath.IsAbs(setting.WarnSound) {
+		setting.WarnSound = filepath.Join(configDir.Path, setting.WarnSound)
+	}
+
+	return nil
 }
