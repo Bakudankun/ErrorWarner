@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,6 +30,7 @@ type Setting struct {
 	WarnFormat string `toml:"warnfmt"`
 	ErrSound   string `toml:"errsound"`
 	WarnSound  string `toml:"warnsound"`
+	UseStdout  bool   `toml:"stdout"`
 }
 
 const (
@@ -44,6 +46,7 @@ var (
 		WarnFormat: `(?i:warn)`,
 		ErrSound:   "",
 		WarnSound:  "",
+		UseStdout:  false,
 	}
 )
 
@@ -51,6 +54,7 @@ func init() {
 	opt := flag.String("opt", "", "Option described in config")
 	errfmt := flag.String("errfmt", "", "Regexp which matches errors")
 	warnfmt := flag.String("warnfmt", "", "Regexp which matches warnings")
+	stdout := flag.Bool("stdout", false, "Use stdout instead of stderr")
 	flag.Parse()
 
 	option := *opt
@@ -75,11 +79,18 @@ func init() {
 	if *warnfmt != "" {
 		setting.WarnFormat = *warnfmt
 	}
+	if *stdout {
+		setting.UseStdout = *stdout
+	}
 }
 
 func main() {
-	errAudio, _ = klangsynthese.LoadFile(setting.ErrSound)
-	warnAudio, _ = klangsynthese.LoadFile(setting.WarnSound)
+	var err error
+
+	errAudio, err = klangsynthese.LoadFile(setting.ErrSound)
+	exitIfErr(err)
+	warnAudio, err = klangsynthese.LoadFile(setting.WarnSound)
+	exitIfErr(err)
 
 	var cmd *exec.Cmd
 
@@ -94,22 +105,36 @@ func main() {
 		cmd = exec.Command(flag.Arg(0), flag.Args()[1:]...)
 	}
 
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
+	var input io.ReadCloser
+	var output *os.File
 
-	stderr, _ := cmd.StderrPipe()
+	if setting.UseStdout {
+		cmd.Stdin = os.Stdin
+		cmd.Stderr = os.Stderr
+		input, err = cmd.StdoutPipe()
+		output = os.Stdout
+	} else {
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		input, err = cmd.StderrPipe()
+		output = os.Stderr
+	}
+	exitIfErr(err)
 
-	matcherErr, _ := regexp.Compile(setting.ErrFormat)
-	matcherWarn, _ := regexp.Compile(setting.WarnFormat)
+	matcherErr, err := regexp.Compile(setting.ErrFormat)
+	exitIfErr(err)
+	matcherWarn, err := regexp.Compile(setting.WarnFormat)
+	exitIfErr(err)
 
 	timer := time.NewTimer(0)
-	scanner := bufio.NewScanner(stderr)
+	scanner := bufio.NewScanner(input)
 
+	// after this, errwarn won't exit or output anything (except for cmd's output) until cmd exits.
 	cmd.Start()
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Fprintln(os.Stderr, line)
+		fmt.Fprintln(output, line)
 
 		isErr := matcherErr != nil && matcherErr.MatchString(line)
 		isWarn := matcherWarn != nil && matcherWarn.MatchString(line)
@@ -153,7 +178,7 @@ func main() {
 
 	<-timer.C
 
-	err := cmd.Wait()
+	err = cmd.Wait()
 
 	var exitStatus int
 	if err == nil {
@@ -222,4 +247,11 @@ func getSetting(name string) error {
 	}
 
 	return nil
+}
+
+func exitIfErr(err error) {
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
