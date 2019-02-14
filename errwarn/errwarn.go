@@ -62,15 +62,11 @@ func init() {
 		option = strings.TrimSuffix(filepath.Base(flag.Arg(0)), ".exe")
 	}
 
-	if err := getSetting(option); err != nil {
+	if err := initSetting(option); err != nil {
 		if *opt == "" {
-			err = getSetting("")
+			err = initSetting("")
 		}
-
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
+		exitIfErr(err)
 	}
 
 	if *errfmt != "" {
@@ -202,7 +198,7 @@ func searchAudioFile(configDir configdir.Config, basename string) (path string) 
 	return ""
 }
 
-func getSetting(name string) error {
+func initSetting(name string) error {
 	setting = defaultSetting
 
 	configDirs := configdir.New("", "ErrorWarner").QueryFolders(configdir.Global)
