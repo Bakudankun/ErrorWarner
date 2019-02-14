@@ -92,7 +92,7 @@ func main() {
 
 	switch nArgs := flag.NArg(); {
 	case nArgs <= 0:
-		return
+		cmd = nil
 
 	case nArgs == 1:
 		cmd = exec.Command(flag.Arg(0))
@@ -101,10 +101,14 @@ func main() {
 		cmd = exec.Command(flag.Arg(0), flag.Args()[1:]...)
 	}
 
-	var input io.ReadCloser
+	var input io.Reader
 	var output *os.File
 
-	if setting.UseStdout {
+	if cmd == nil {
+		input = os.Stdin
+		output = os.Stdout
+		err = nil
+	} else if setting.UseStdout {
 		cmd.Stdin = os.Stdin
 		cmd.Stderr = os.Stderr
 		input, err = cmd.StdoutPipe()
@@ -126,7 +130,9 @@ func main() {
 	scanner := bufio.NewScanner(input)
 
 	// after this, errwarn won't exit or output anything (except for cmd's output) until cmd exits.
-	cmd.Start()
+	if cmd != nil {
+		cmd.Start()
+	}
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -173,6 +179,10 @@ func main() {
 	}
 
 	<-timer.C
+
+	if cmd == nil {
+		os.Exit(0)
+	}
 
 	err = cmd.Wait()
 
