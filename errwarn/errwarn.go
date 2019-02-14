@@ -102,22 +102,22 @@ func main() {
 	}
 
 	var input io.Reader
-	var output *os.File
 
 	if cmd == nil {
-		input = os.Stdin
-		output = os.Stdout
+		input = io.TeeReader(os.Stdin, os.Stdout)
 		err = nil
 	} else if setting.UseStdout {
 		cmd.Stdin = os.Stdin
 		cmd.Stderr = os.Stderr
-		input, err = cmd.StdoutPipe()
-		output = os.Stdout
+		var stdout io.Reader
+		stdout, err = cmd.StdoutPipe()
+		input = io.TeeReader(stdout, os.Stdout)
 	} else {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
-		input, err = cmd.StderrPipe()
-		output = os.Stderr
+		var stderr io.Reader
+		stderr, err = cmd.StderrPipe()
+		input = io.TeeReader(stderr, os.Stderr)
 	}
 	exitIfErr(err)
 
@@ -136,7 +136,6 @@ func main() {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Fprintln(output, line)
 
 		isErr := matcherErr != nil && matcherErr.MatchString(line)
 		isWarn := matcherWarn != nil && matcherWarn.MatchString(line)
