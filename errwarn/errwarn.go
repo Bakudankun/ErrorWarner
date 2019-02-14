@@ -208,8 +208,6 @@ func searchAudioFile(configDir configdir.Config, basename string) (path string) 
 }
 
 func initSetting(name string) error {
-	setting = defaultSetting
-
 	configDirs := configdir.New("", "ErrorWarner").QueryFolders(configdir.Global)
 
 	if len(configDirs) <= 0 {
@@ -222,6 +220,8 @@ func initSetting(name string) error {
 	}
 
 	if name == "" {
+		setting = defaultSetting
+
 		// use option of empty name as default if it exists
 		if configDir.Exists(configFileName) {
 			var config Config
@@ -232,6 +232,8 @@ func initSetting(name string) error {
 			}
 		}
 	} else {
+		initSetting("")
+
 		if !configDir.Exists(configFileName) {
 			return errors.New("Config file not found.")
 		}
