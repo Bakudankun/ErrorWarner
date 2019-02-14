@@ -221,7 +221,17 @@ func initSetting(name string) error {
 		configDir.MkdirAll()
 	}
 
-	if name != "" {
+	if name == "" {
+		// use option of empty name as default if it exists
+		if configDir.Exists(configFileName) {
+			var config Config
+			if _, err := toml.DecodeFile(filepath.Join(configDir.Path, configFileName), &config); err == nil {
+				if option, ok := config.Options[name]; ok {
+					mergo.Merge(&setting, option, mergo.WithOverride)
+				}
+			}
+		}
+	} else {
 		if !configDir.Exists(configFileName) {
 			return errors.New("Config file not found.")
 		}
