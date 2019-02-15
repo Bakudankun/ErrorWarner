@@ -14,9 +14,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/200sc/klangsynthese"
-	"github.com/200sc/klangsynthese/audio"
 	"github.com/BurntSushi/toml"
+	"github.com/faiface/beep"
+	"github.com/faiface/beep/flac"
+	"github.com/faiface/beep/mp3"
+	"github.com/faiface/beep/speaker"
+	"github.com/faiface/beep/vorbis"
+	"github.com/faiface/beep/wav"
 	"github.com/imdario/mergo"
 	"github.com/shibukawa/configdir"
 )
@@ -34,19 +38,25 @@ type Setting struct {
 }
 
 const (
-	configFileName string = "config.toml"
+	configFileName string          = "config.toml"
+	sampleRate     beep.SampleRate = 44100
 )
 
 var (
-	errAudio       audio.Audio
-	warnAudio      audio.Audio
+	errSound       *beep.Buffer
+	warnSound      *beep.Buffer
 	setting        Setting
-	defaultSetting Setting = Setting{
+	defaultSetting = Setting{
 		ErrFormat:  `(?i:error)`,
 		WarnFormat: `(?i:warn)`,
 		ErrSound:   "",
 		WarnSound:  "",
 		UseStdout:  false,
+	}
+	format = beep.Format{
+		NumChannels: 2,
+		Precision:   2,
+		SampleRate:  sampleRate,
 	}
 )
 
@@ -83,9 +93,16 @@ func init() {
 func main() {
 	var err error
 
-	errAudio, err = klangsynthese.LoadFile(setting.ErrSound)
-	exitIfErr(err)
-	warnAudio, err = klangsynthese.LoadFile(setting.WarnSound)
+	if setting.ErrSound != "" {
+		errSound, err = loadAudioFile(setting.ErrSound)
+		exitIfErr(err)
+	}
+	if setting.WarnSound != "" {
+		warnSound, err = loadAudioFile(setting.WarnSound)
+		exitIfErr(err)
+	}
+
+	err = speaker.Init(sampleRate, sampleRate.N(50*time.Millisecond))
 	exitIfErr(err)
 
 	var cmd *exec.Cmd
@@ -126,7 +143,8 @@ func main() {
 	matcherWarn, err := regexp.Compile(setting.WarnFormat)
 	exitIfErr(err)
 
-	timer := time.NewTimer(0)
+	playing := make(chan struct{})
+	close(playing)
 	scanner := bufio.NewScanner(input)
 
 	// after this, errwarn won't exit or output anything (except for cmd's output) until cmd exits.
@@ -139,45 +157,33 @@ func main() {
 
 		isErr := matcherErr != nil && matcherErr.MatchString(line)
 		isWarn := matcherWarn != nil && matcherWarn.MatchString(line)
-		if !isErr && !isWarn {
-			continue
-		}
 
-		if errAudio != nil {
-			errAudio.Stop()
-		}
-		if warnAudio != nil {
-			warnAudio.Stop()
-		}
-
-		var newAudio *audio.Audio
+		var newSound *beep.Buffer
 
 		switch {
 		case isErr:
-			if errAudio != nil {
-				newAudio = &errAudio
-			}
-
+			newSound = errSound
 		case isWarn:
-			if warnAudio != nil {
-				newAudio = &warnAudio
-			}
+			newSound = warnSound
+		default:
+			newSound = nil
 		}
 
-		if newAudio == nil {
+		if newSound == nil {
 			continue
 		}
 
-		(*newAudio).Play()
+		speaker.Clear()
 
-		if !timer.Stop() {
-			<-timer.C
-		}
-		timer.Reset((*newAudio).PlayLength())
+		playing = make(chan struct{})
+		speaker.Play(beep.Seq(
+			newSound.Streamer(0, newSound.Len()),
+			beep.Callback(func() { close(playing) })))
+
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	<-timer.C
+	<-playing
 
 	if cmd == nil {
 		os.Exit(0)
@@ -195,16 +201,6 @@ func main() {
 	}
 
 	os.Exit(exitStatus)
-}
-
-func searchAudioFile(configDir configdir.Config, basename string) (path string) {
-	for _, ext := range []string{".wav", ".flac", ".mp3"} {
-		if filename := basename + ext; configDir.Exists(filename) {
-			return filepath.Join(configDir.Path, filename)
-		}
-	}
-
-	return ""
 }
 
 func initSetting(name string) error {
@@ -264,6 +260,48 @@ func initSetting(name string) error {
 	}
 
 	return nil
+}
+
+func searchAudioFile(configDir configdir.Config, basename string) (path string) {
+	for _, ext := range []string{".wav", ".flac", ".mp3", ".ogg"} {
+		if filename := basename + ext; configDir.Exists(filename) {
+			return filepath.Join(configDir.Path, filename)
+		}
+	}
+
+	return ""
+}
+
+func loadAudioFile(path string) (*beep.Buffer, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var s beep.StreamCloser
+	var f beep.Format
+
+	switch filepath.Ext(path) {
+	case ".wav":
+		s, f, err = wav.Decode(file)
+	case ".mp3":
+		s, f, err = mp3.Decode(file)
+	case ".flac":
+		s, f, err = flac.Decode(file)
+	case ".ogg":
+		s, f, err = vorbis.Decode(file)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	buffer := beep.NewBuffer(format)
+	buffer.Append(beep.Resample(3, f.SampleRate, sampleRate, s))
+
+	s.Close()
+
+	return buffer, nil
 }
 
 func exitIfErr(err error) {
