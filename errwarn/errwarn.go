@@ -61,10 +61,10 @@ var (
 )
 
 func init() {
-	opt := flag.String("opt", "", "Option described in config")
-	errfmt := flag.String("errfmt", "", "Regexp which matches errors")
-	warnfmt := flag.String("warnfmt", "", "Regexp which matches warnings")
-	stdout := flag.Bool("stdout", false, "Use stdout instead of stderr")
+	opt := flag.String("p", "", "Specify an `option` described in config")
+	errfmt := flag.String("e", "", "Specify `regexp` which matches errors")
+	warnfmt := flag.String("w", "", "Specify `regexp` which matches warnings")
+	stdout := flag.Bool("stdout", false, "Read stdout of cmd instead of stderr")
 	flag.Parse()
 
 	option := *opt
