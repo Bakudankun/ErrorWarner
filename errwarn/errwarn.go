@@ -26,7 +26,7 @@ import (
 )
 
 type Config struct {
-	Options map[string]Setting `toml:"option"`
+	Presets map[string]Setting `toml:"preset"`
 }
 
 type Setting struct {
@@ -65,36 +65,36 @@ func init() {
 		name := flag.CommandLine.Name()
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", name)
 		fmt.Fprintf(flag.CommandLine.Output(),
-			`  %s [-p <option>] [-e <regexp>] [-w <regexp>] [-stdout] [--] <cmd>
-  <cmd> | %s [-p <option>] [-e <regexp>] [-w <regexp>]
+			`  %s [-p <preset>] [-e <regexp>] [-w <regexp>] [-stdout] [--] <cmd>
+  <cmd> | %s [-p <preset>] [-e <regexp>] [-w <regexp>]
 
 `, name, name)
 		flag.PrintDefaults()
 	}
 
-	opt := flag.String("p", "", "Specify an `option` described in config")
-	errfmt := flag.String("e", "", "Specify `regexp` to match errors")
-	warnfmt := flag.String("w", "", "Specify `regexp` to match warnings")
+	p := flag.String("p", "", "Specify a `preset` described in config")
+	e := flag.String("e", "", "Specify `regexp` to match errors")
+	w := flag.String("w", "", "Specify `regexp` to match warnings")
 	stdout := flag.Bool("stdout", false, "Read stdout of cmd instead of stderr")
 	flag.Parse()
 
-	option := *opt
-	if option == "" {
-		option = strings.TrimSuffix(filepath.Base(flag.Arg(0)), ".exe")
+	preset := *p
+	if preset == "" {
+		preset = strings.TrimSuffix(filepath.Base(flag.Arg(0)), ".exe")
 	}
 
-	if err := initSetting(option); err != nil {
-		if *opt == "" {
+	if err := initSetting(preset); err != nil {
+		if *p == "" {
 			err = initSetting("")
 		}
 		exitIfErr(err)
 	}
 
-	if *errfmt != "" {
-		setting.ErrFormat = *errfmt
+	if *e != "" {
+		setting.ErrFormat = *e
 	}
-	if *warnfmt != "" {
-		setting.WarnFormat = *warnfmt
+	if *w != "" {
+		setting.WarnFormat = *w
 	}
 	if *stdout {
 		setting.UseStdout = *stdout
@@ -229,12 +229,12 @@ func initSetting(name string) error {
 	if name == "" {
 		setting = defaultSetting
 
-		// use option of empty name as default if it exists
+		// use preset of empty name as default if it exists
 		if configDir.Exists(configFileName) {
 			var config Config
 			if _, err := toml.DecodeFile(filepath.Join(configDir.Path, configFileName), &config); err == nil {
-				if option, ok := config.Options[name]; ok {
-					mergo.Merge(&setting, option, mergo.WithOverride)
+				if preset, ok := config.Presets[name]; ok {
+					mergo.Merge(&setting, preset, mergo.WithOverride)
 				}
 			}
 		}
@@ -251,10 +251,10 @@ func initSetting(name string) error {
 			return err
 		}
 
-		if option, ok := config.Options[name]; !ok {
-			return errors.New("Specified option does not exist.")
+		if preset, ok := config.Presets[name]; !ok {
+			return errors.New("Specified preset does not exist.")
 		} else {
-			mergo.Merge(&setting, option, mergo.WithOverride)
+			mergo.Merge(&setting, preset, mergo.WithOverride)
 		}
 	}
 
