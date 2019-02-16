@@ -61,9 +61,20 @@ var (
 )
 
 func init() {
+	flag.Usage = func() {
+		name := flag.CommandLine.Name()
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", name)
+		fmt.Fprintf(flag.CommandLine.Output(),
+			`  %s [-p <option>] [-e <regexp>] [-w <regexp>] [-stdout] [--] <cmd>
+  <cmd> | %s [-p <option>] [-e <regexp>] [-w <regexp>]
+
+`, name, name)
+		flag.PrintDefaults()
+	}
+
 	opt := flag.String("p", "", "Specify an `option` described in config")
-	errfmt := flag.String("e", "", "Specify `regexp` which matches errors")
-	warnfmt := flag.String("w", "", "Specify `regexp` which matches warnings")
+	errfmt := flag.String("e", "", "Specify `regexp` to match errors")
+	warnfmt := flag.String("w", "", "Specify `regexp` to match warnings")
 	stdout := flag.Bool("stdout", false, "Read stdout of cmd instead of stderr")
 	flag.Parse()
 
