@@ -47,8 +47,8 @@ var (
 	warnSound      *beep.Buffer
 	setting        Setting
 	defaultSetting = Setting{
-		ErrFormat:  `(?i:error)`,
-		WarnFormat: `(?i:warn)`,
+		ErrFormat:  "",
+		WarnFormat: "",
 		ErrSound:   "",
 		WarnSound:  "",
 		UseStdout:  false,
