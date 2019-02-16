@@ -21,12 +21,11 @@ import (
 	"github.com/faiface/beep/speaker"
 	"github.com/faiface/beep/vorbis"
 	"github.com/faiface/beep/wav"
-	"github.com/imdario/mergo"
 	"github.com/shibukawa/configdir"
 )
 
 type Config struct {
-	Presets map[string]Setting `toml:"preset"`
+	Presets map[string]toml.Primitive `toml:"preset"`
 }
 
 type Setting struct {
@@ -78,27 +77,8 @@ func init() {
 	stdout := flag.Bool("stdout", false, "Read stdout of cmd instead of stderr")
 	flag.Parse()
 
-	preset := *p
-	if preset == "" {
-		preset = strings.TrimSuffix(filepath.Base(flag.Arg(0)), ".exe")
-	}
-
-	if err := initSetting(preset); err != nil {
-		if *p == "" {
-			err = initSetting("")
-		}
-		exitIfErr(err)
-	}
-
-	if *e != "" {
-		setting.ErrFormat = *e
-	}
-	if *w != "" {
-		setting.WarnFormat = *w
-	}
-	if *stdout {
-		setting.UseStdout = *stdout
-	}
+	err := initSetting(*p, *e, *w, *stdout)
+	exitIfErr(err)
 }
 
 func main() {
@@ -219,11 +199,11 @@ func main() {
 	os.Exit(exitStatus)
 }
 
-func initSetting(name string) error {
+func getConfigDir() (*configdir.Config, error) {
 	configDirs := configdir.New("", "ErrorWarner").QueryFolders(configdir.Global)
 
 	if len(configDirs) <= 0 {
-		return errors.New("Unknown Error, probably not my fault.")
+		return nil, errors.New("Unknown Error. Probably not my fault.")
 	}
 
 	configDir := configDirs[0]
@@ -231,35 +211,53 @@ func initSetting(name string) error {
 		configDir.MkdirAll()
 	}
 
-	if name == "" {
-		setting = defaultSetting
+	return configDir, nil
+}
 
-		// use preset of empty name as default if it exists
-		if configDir.Exists(configFileName) {
-			var config Config
-			if _, err := toml.DecodeFile(filepath.Join(configDir.Path, configFileName), &config); err == nil {
-				if preset, ok := config.Presets[name]; ok {
-					mergo.Merge(&setting, preset, mergo.WithOverride)
-				}
-			}
-		}
-	} else {
-		initSetting("")
+func initSetting(p, e, w string, stdout bool) error {
+	setting = defaultSetting
 
-		if !configDir.Exists(configFileName) {
+	configDir, err := getConfigDir()
+	if err != nil {
+		return err
+	}
+
+	var config Config
+
+	if !configDir.Exists(configFileName) {
+		if p != "" {
 			return errors.New("Config file not found.")
 		}
-
-		var config Config
-
-		if _, err := toml.DecodeFile(filepath.Join(configDir.Path, configFileName), &config); err != nil {
+	} else {
+		md, err := toml.DecodeFile(filepath.Join(configDir.Path, configFileName), &config)
+		if err != nil {
 			return err
 		}
 
-		if preset, ok := config.Presets[name]; !ok {
-			return errors.New("Specified preset does not exist.")
-		} else {
-			mergo.Merge(&setting, preset, mergo.WithOverride)
+		// use preset of empty name as default if it exists
+		if prim, ok := config.Presets[""]; ok {
+			err := md.PrimitiveDecode(prim, &setting)
+			if err != nil {
+				return err
+			}
+		}
+
+		preset := p
+		if cmd := flag.Arg(0); preset == "" && cmd != "" {
+			preset = strings.TrimSuffix(filepath.Base(cmd), filepath.Ext(cmd))
+		}
+
+		if preset != "" {
+			if prim, ok := config.Presets[preset]; !ok {
+				if p != "" {
+					return errors.New("Specified preset does not exist.")
+				}
+			} else {
+				err := md.PrimitiveDecode(prim, &setting)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 
@@ -273,6 +271,16 @@ func initSetting(name string) error {
 		setting.WarnSound = searchAudioFile(*configDir, "warn")
 	} else if !filepath.IsAbs(setting.WarnSound) {
 		setting.WarnSound = filepath.Join(configDir.Path, setting.WarnSound)
+	}
+
+	if e != "" {
+		setting.ErrFormat = e
+	}
+	if w != "" {
+		setting.WarnFormat = w
+	}
+	if stdout {
+		setting.UseStdout = stdout
 	}
 
 	return nil
