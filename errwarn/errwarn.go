@@ -149,10 +149,15 @@ func main() {
 	}
 	exitIfErr(err)
 
-	matcherErr, err := regexp.Compile(setting.ErrFormat)
-	exitIfErr(err)
-	matcherWarn, err := regexp.Compile(setting.WarnFormat)
-	exitIfErr(err)
+	var matcherErr, matcherWarn *regexp.Regexp
+	if setting.ErrFormat != "" {
+		matcherErr, err = regexp.Compile(setting.ErrFormat)
+		exitIfErr(err)
+	}
+	if setting.WarnFormat != "" {
+		matcherWarn, err = regexp.Compile(setting.WarnFormat)
+		exitIfErr(err)
+	}
 
 	playing := make(chan struct{})
 	close(playing)
