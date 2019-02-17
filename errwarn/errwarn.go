@@ -199,11 +199,11 @@ func main() {
 	os.Exit(exitStatus)
 }
 
-func getConfigDir() (*configdir.Config, error) {
+func getConfigDir() *configdir.Config {
 	configDirs := configdir.New("", "ErrorWarner").QueryFolders(configdir.Global)
 
 	if len(configDirs) <= 0 {
-		return nil, errors.New("Unknown Error. Probably not my fault.")
+		return nil
 	}
 
 	configDir := configDirs[0]
@@ -211,15 +211,15 @@ func getConfigDir() (*configdir.Config, error) {
 		configDir.MkdirAll()
 	}
 
-	return configDir, nil
+	return configDir
 }
 
 func initSetting(p, e, w string, stdout bool) error {
 	setting = defaultSetting
 
-	configDir, err := getConfigDir()
-	if err != nil {
-		return err
+	configDir := getConfigDir()
+	if configDir == nil {
+		return errors.New("Unknown Error. Probably not my fault.")
 	}
 
 	var config Config
