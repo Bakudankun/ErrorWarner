@@ -64,20 +64,22 @@ func init() {
 		name := flag.CommandLine.Name()
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", name)
 		fmt.Fprintf(flag.CommandLine.Output(),
-			`  %s [-p <preset>] [-e <regexp>] [-w <regexp>] [-stdout] [--] <cmd>
+			`  %s [-p <preset>] [-e <regexp>] [-w <regexp>] [-stdout[=true|false]] [--] <cmd>
   <cmd> | %s [-p <preset>] [-e <regexp>] [-w <regexp>]
 
 `, name, name)
 		flag.PrintDefaults()
 	}
 
-	p := flag.String("p", "", "Specify a `preset` described in config")
-	e := flag.String("e", "", "Specify `regexp` to match errors")
-	w := flag.String("w", "", "Specify `regexp` to match warnings")
-	stdout := flag.Bool("stdout", false, "Read stdout of cmd instead of stderr")
+	var p, e, w stringFlag
+	var stdout boolFlag
+	flag.Var(&p, "p", "Use `<preset>` described in config")
+	flag.Var(&e, "e", "Use `<regexp>` to match errors")
+	flag.Var(&w, "w", "Use `<regexp>` to match warnings")
+	flag.Var(&stdout, "stdout", "Read stdout of cmd instead of stderr")
 	flag.Parse()
 
-	err := initSetting(*p, *e, *w, *stdout)
+	err := initSetting(p, e, w, stdout)
 	exitIfErr(err)
 }
 
@@ -214,7 +216,7 @@ func getConfigDir() *configdir.Config {
 	return configDir
 }
 
-func initSetting(p, e, w string, stdout bool) error {
+func initSetting(p, e, w stringFlag, stdout boolFlag) error {
 	setting = defaultSetting
 
 	configDir := getConfigDir()
@@ -225,7 +227,7 @@ func initSetting(p, e, w string, stdout bool) error {
 	var config Config
 
 	if !configDir.Exists(configFileName) {
-		if p != "" {
+		if p.set {
 			return errors.New("Config file not found.")
 		}
 	} else {
@@ -242,14 +244,13 @@ func initSetting(p, e, w string, stdout bool) error {
 			}
 		}
 
-		preset := p
-		if cmd := flag.Arg(0); preset == "" && cmd != "" {
-			preset = strings.TrimSuffix(filepath.Base(cmd), filepath.Ext(cmd))
+		if cmd := flag.Arg(0); !p.set && cmd != "" {
+			p.value = strings.TrimSuffix(filepath.Base(cmd), filepath.Ext(cmd))
 		}
 
-		if preset != "" {
-			if prim, ok := config.Presets[preset]; !ok {
-				if p != "" {
+		if p.value != "" {
+			if prim, ok := config.Presets[p.value]; !ok {
+				if p.set {
 					return errors.New("Specified preset does not exist.")
 				}
 			} else {
@@ -273,14 +274,14 @@ func initSetting(p, e, w string, stdout bool) error {
 		setting.WarnSound = filepath.Join(configDir.Path, setting.WarnSound)
 	}
 
-	if e != "" {
-		setting.ErrFormat = e
+	if e.set {
+		setting.ErrFormat = e.value
 	}
-	if w != "" {
-		setting.WarnFormat = w
+	if w.set {
+		setting.WarnFormat = w.value
 	}
-	if stdout {
-		setting.UseStdout = stdout
+	if stdout.set {
+		setting.UseStdout = stdout.value
 	}
 
 	return nil
