@@ -145,10 +145,12 @@ func main() {
 	close(playing)
 	scanner := bufio.NewScanner(input)
 
-	// after this, errwarn won't exit or output anything (except for cmd's output) until cmd exits.
 	if cmd != nil {
-		cmd.Start()
+		err = cmd.Start()
+		exitIfErr(err)
 	}
+
+	// after here, errwarn won't exit or output anything (except for cmd's output) until cmd exits.
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -192,10 +194,12 @@ func main() {
 	var exitStatus int
 	if err == nil {
 		exitStatus = 0
-	} else if exitErr, ok := err.(*exec.ExitError); ok {
-		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-			exitStatus = status.ExitStatus()
-		}
+	} else if exitErr, ok := err.(*exec.ExitError); !ok {
+		exitIfErr(err)
+	} else if status, ok := exitErr.Sys().(syscall.WaitStatus); !ok {
+		exitIfErr(err)
+	} else {
+		exitStatus = status.ExitStatus()
 	}
 
 	os.Exit(exitStatus)
