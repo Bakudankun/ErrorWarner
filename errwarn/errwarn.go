@@ -33,6 +33,9 @@ type Setting struct {
 	WarningFormat string
 	ErrorSound    string
 	WarningSound  string
+	FinishSound   string
+	SuccessSound  string
+	FailureSound  string
 	UseStdout     bool `toml:"stdout"`
 }
 
@@ -44,12 +47,18 @@ const (
 var (
 	errSound       *beep.Buffer
 	warnSound      *beep.Buffer
+	finishSound    *beep.Buffer
+	successSound   *beep.Buffer
+	failSound      *beep.Buffer
 	setting        Setting
 	defaultSetting = Setting{
 		ErrorFormat:   "",
 		WarningFormat: "",
 		ErrorSound:    "",
 		WarningSound:  "",
+		FinishSound:   "",
+		SuccessSound:  "",
+		FailureSound:  "",
 		UseStdout:     false,
 	}
 	format = beep.Format{
@@ -92,6 +101,18 @@ func main() {
 	}
 	if setting.WarningSound != "" {
 		warnSound, err = loadAudioFile(setting.WarningSound)
+		exitIfErr(err)
+	}
+	if setting.FinishSound != "" {
+		finishSound, err = loadAudioFile(setting.FinishSound)
+		exitIfErr(err)
+	}
+	if setting.SuccessSound != "" {
+		successSound, err = loadAudioFile(setting.SuccessSound)
+		exitIfErr(err)
+	}
+	if setting.FailureSound != "" {
+		failSound, err = loadAudioFile(setting.FailureSound)
 		exitIfErr(err)
 	}
 
@@ -152,6 +173,7 @@ func main() {
 
 	// after here, errwarn won't exit or output anything (except for cmd's output) until cmd exits.
 
+	var found bool
 	for scanner.Scan() {
 		line := scanner.Text()
 
@@ -173,6 +195,7 @@ func main() {
 			continue
 		}
 
+		found = true
 		speaker.Clear()
 
 		playing = make(chan struct{})
@@ -183,24 +206,46 @@ func main() {
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	<-playing
+	var exitStatus int
+	var exitSound *beep.Buffer
 
 	if cmd == nil {
-		os.Exit(0)
-	}
-
-	err = cmd.Wait()
-
-	var exitStatus int
-	if err == nil {
 		exitStatus = 0
-	} else if exitErr, ok := err.(*exec.ExitError); !ok {
-		exitIfErr(err)
-	} else if status, ok := exitErr.Sys().(syscall.WaitStatus); !ok {
-		exitIfErr(err)
+		exitSound = finishSound
 	} else {
-		exitStatus = status.ExitStatus()
+		err = cmd.Wait()
+
+		if err == nil {
+			exitStatus = 0
+		} else if exitErr, ok := err.(*exec.ExitError); !ok {
+			fmt.Fprintln(os.Stderr, err)
+			exitStatus = 1
+		} else if status, ok := exitErr.Sys().(syscall.WaitStatus); !ok {
+			fmt.Fprintln(os.Stderr, err)
+			exitStatus = 1
+		} else {
+			exitStatus = status.ExitStatus()
+		}
+
+		if exitStatus != 0 {
+			exitSound = failSound
+		} else if found {
+			exitSound = finishSound
+		} else {
+			exitSound = successSound
+		}
 	}
+
+	if exitSound != nil {
+		speaker.Clear()
+
+		playing = make(chan struct{})
+		speaker.Play(beep.Seq(
+			exitSound.Streamer(0, exitSound.Len()),
+			beep.Callback(func() { close(playing) })))
+	}
+
+	<-playing
 
 	os.Exit(exitStatus)
 }
@@ -276,6 +321,24 @@ func initSetting(p, e, w stringFlag, stdout boolFlag) error {
 		setting.WarningSound = searchAudioFile(*configDir, "warn")
 	} else if !filepath.IsAbs(setting.WarningSound) {
 		setting.WarningSound = filepath.Join(configDir.Path, setting.WarningSound)
+	}
+
+	if setting.FinishSound == "" {
+		setting.FinishSound = searchAudioFile(*configDir, "finish")
+	} else if !filepath.IsAbs(setting.FinishSound) {
+		setting.FinishSound = filepath.Join(configDir.Path, setting.FinishSound)
+	}
+
+	if setting.SuccessSound == "" {
+		setting.SuccessSound = searchAudioFile(*configDir, "success")
+	} else if !filepath.IsAbs(setting.SuccessSound) {
+		setting.SuccessSound = filepath.Join(configDir.Path, setting.SuccessSound)
+	}
+
+	if setting.FailureSound == "" {
+		setting.FailureSound = searchAudioFile(*configDir, "fail")
+	} else if !filepath.IsAbs(setting.FailureSound) {
+		setting.FailureSound = filepath.Join(configDir.Path, setting.FailureSound)
 	}
 
 	if e.set {
