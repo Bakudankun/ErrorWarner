@@ -29,11 +29,11 @@ type Config struct {
 }
 
 type Setting struct {
-	ErrFormat  string `toml:"errfmt"`
-	WarnFormat string `toml:"warnfmt"`
-	ErrSound   string `toml:"errsound"`
-	WarnSound  string `toml:"warnsound"`
-	UseStdout  bool   `toml:"stdout"`
+	ErrorFormat   string
+	WarningFormat string
+	ErrorSound    string
+	WarningSound  string
+	UseStdout     bool `toml:"stdout"`
 }
 
 const (
@@ -46,11 +46,11 @@ var (
 	warnSound      *beep.Buffer
 	setting        Setting
 	defaultSetting = Setting{
-		ErrFormat:  "",
-		WarnFormat: "",
-		ErrSound:   "",
-		WarnSound:  "",
-		UseStdout:  false,
+		ErrorFormat:   "",
+		WarningFormat: "",
+		ErrorSound:    "",
+		WarningSound:  "",
+		UseStdout:     false,
 	}
 	format = beep.Format{
 		NumChannels: 2,
@@ -86,12 +86,12 @@ func init() {
 func main() {
 	var err error
 
-	if setting.ErrSound != "" {
-		errSound, err = loadAudioFile(setting.ErrSound)
+	if setting.ErrorSound != "" {
+		errSound, err = loadAudioFile(setting.ErrorSound)
 		exitIfErr(err)
 	}
-	if setting.WarnSound != "" {
-		warnSound, err = loadAudioFile(setting.WarnSound)
+	if setting.WarningSound != "" {
+		warnSound, err = loadAudioFile(setting.WarningSound)
 		exitIfErr(err)
 	}
 
@@ -132,12 +132,12 @@ func main() {
 	exitIfErr(err)
 
 	var matcherErr, matcherWarn *regexp.Regexp
-	if setting.ErrFormat != "" {
-		matcherErr, err = regexp.Compile(setting.ErrFormat)
+	if setting.ErrorFormat != "" {
+		matcherErr, err = regexp.Compile(setting.ErrorFormat)
 		exitIfErr(err)
 	}
-	if setting.WarnFormat != "" {
-		matcherWarn, err = regexp.Compile(setting.WarnFormat)
+	if setting.WarningFormat != "" {
+		matcherWarn, err = regexp.Compile(setting.WarningFormat)
 		exitIfErr(err)
 	}
 
@@ -266,23 +266,23 @@ func initSetting(p, e, w stringFlag, stdout boolFlag) error {
 		}
 	}
 
-	if setting.ErrSound == "" {
-		setting.ErrSound = searchAudioFile(*configDir, "error")
-	} else if !filepath.IsAbs(setting.ErrSound) {
-		setting.ErrSound = filepath.Join(configDir.Path, setting.ErrSound)
+	if setting.ErrorSound == "" {
+		setting.ErrorSound = searchAudioFile(*configDir, "error")
+	} else if !filepath.IsAbs(setting.ErrorSound) {
+		setting.ErrorSound = filepath.Join(configDir.Path, setting.ErrorSound)
 	}
 
-	if setting.WarnSound == "" {
-		setting.WarnSound = searchAudioFile(*configDir, "warn")
-	} else if !filepath.IsAbs(setting.WarnSound) {
-		setting.WarnSound = filepath.Join(configDir.Path, setting.WarnSound)
+	if setting.WarningSound == "" {
+		setting.WarningSound = searchAudioFile(*configDir, "warn")
+	} else if !filepath.IsAbs(setting.WarningSound) {
+		setting.WarningSound = filepath.Join(configDir.Path, setting.WarningSound)
 	}
 
 	if e.set {
-		setting.ErrFormat = e.value
+		setting.ErrorFormat = e.value
 	}
 	if w.set {
-		setting.WarnFormat = w.value
+		setting.WarningFormat = w.value
 	}
 	if stdout.set {
 		setting.UseStdout = stdout.value
