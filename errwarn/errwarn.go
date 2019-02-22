@@ -374,7 +374,7 @@ func loadAudioFile(path string) (*beep.Buffer, error) {
 	}
 
 	buffer := beep.NewBuffer(format)
-	buffer.Append(beep.Resample(3, f.SampleRate, format.SampleRate, s))
+	buffer.Append(beep.Resample(4, f.SampleRate, format.SampleRate, s))
 
 	s.Close()
 
