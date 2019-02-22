@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"syscall"
@@ -31,40 +32,57 @@ type Config struct {
 type Setting struct {
 	ErrorFormat   string
 	WarningFormat string
-	ErrorSound    string
-	WarningSound  string
-	FinishSound   string
-	SuccessSound  string
-	FailureSound  string
+	Soundset      string
 	UseStdout     bool `toml:"stdout"`
 }
 
+type soundset struct {
+	Error   *beep.Buffer `file:"error"`
+	Warning *beep.Buffer `file:"warn"`
+	Finish  *beep.Buffer `file:"finish"`
+	Success *beep.Buffer `file:"success"`
+	Failure *beep.Buffer `file:"fail"`
+}
+
+func (s *soundset) load() error {
+	if s == nil {
+		return errors.New("Internal error.")
+	}
+
+	sv := reflect.ValueOf(s).Elem()
+	st := reflect.TypeOf(*s)
+
+	for i := 0; i < st.NumField(); i++ {
+		name := st.Field(i).Tag.Get("file")
+
+		path := searchAudioFile(name)
+		if path == "" {
+			continue
+		}
+
+		b, err := loadAudioFile(path)
+		if err != nil {
+			return err
+		}
+
+		sv.Field(i).Set(reflect.ValueOf(b))
+	}
+
+	return nil
+}
+
 const (
-	configFileName string          = "config.toml"
-	sampleRate     beep.SampleRate = 44100
+	configFileName   string = "config.toml"
+	soundsetsDirName string = "soundsets"
 )
 
 var (
-	errSound       *beep.Buffer
-	warnSound      *beep.Buffer
-	finishSound    *beep.Buffer
-	successSound   *beep.Buffer
-	failSound      *beep.Buffer
-	setting        Setting
-	defaultSetting = Setting{
-		ErrorFormat:   "",
-		WarningFormat: "",
-		ErrorSound:    "",
-		WarningSound:  "",
-		FinishSound:   "",
-		SuccessSound:  "",
-		FailureSound:  "",
-		UseStdout:     false,
-	}
-	format = beep.Format{
+	configDir configdir.Config
+	setting   Setting
+	format    = beep.Format{
 		NumChannels: 2,
 		Precision:   2,
-		SampleRate:  sampleRate,
+		SampleRate:  44100,
 	}
 )
 
@@ -80,43 +98,31 @@ func init() {
 		flag.PrintDefaults()
 	}
 
-	var p, e, w stringFlag
+	var err error
+	configDir, err = getConfigDir()
+	exitIfErr(err)
+
+	var p, e, w, s stringFlag
 	var stdout boolFlag
 	flag.Var(&p, "p", "Use `<preset>` described in config")
 	flag.Var(&e, "e", "Use `<regexp>` to match errors")
 	flag.Var(&w, "w", "Use `<regexp>` to match warnings")
+	flag.Var(&s, "s", "Use sounds of `<soundset>`")
 	flag.Var(&stdout, "stdout", "Read stdout of cmd instead of stderr")
 	flag.Parse()
 
-	err := initSetting(p, e, w, stdout)
+	err = initSetting(p, e, w, s, stdout)
 	exitIfErr(err)
 }
 
 func main() {
 	var err error
+	var sounds soundset
 
-	if setting.ErrorSound != "" {
-		errSound, err = loadAudioFile(setting.ErrorSound)
-		exitIfErr(err)
-	}
-	if setting.WarningSound != "" {
-		warnSound, err = loadAudioFile(setting.WarningSound)
-		exitIfErr(err)
-	}
-	if setting.FinishSound != "" {
-		finishSound, err = loadAudioFile(setting.FinishSound)
-		exitIfErr(err)
-	}
-	if setting.SuccessSound != "" {
-		successSound, err = loadAudioFile(setting.SuccessSound)
-		exitIfErr(err)
-	}
-	if setting.FailureSound != "" {
-		failSound, err = loadAudioFile(setting.FailureSound)
-		exitIfErr(err)
-	}
+	err = sounds.load()
+	exitIfErr(err)
 
-	err = speaker.Init(sampleRate, sampleRate.N(50*time.Millisecond))
+	err = speaker.Init(format.SampleRate, format.SampleRate.N(50*time.Millisecond))
 	exitIfErr(err)
 
 	var cmd *exec.Cmd
@@ -184,9 +190,9 @@ func main() {
 
 		switch {
 		case isErr:
-			newSound = errSound
+			newSound = sounds.Error
 		case isWarn:
-			newSound = warnSound
+			newSound = sounds.Warning
 		default:
 			newSound = nil
 		}
@@ -211,7 +217,7 @@ func main() {
 
 	if cmd == nil {
 		exitStatus = 0
-		exitSound = finishSound
+		exitSound = sounds.Finish
 	} else {
 		err = cmd.Wait()
 
@@ -228,11 +234,11 @@ func main() {
 		}
 
 		if exitStatus != 0 {
-			exitSound = failSound
+			exitSound = sounds.Failure
 		} else if found {
-			exitSound = finishSound
+			exitSound = sounds.Finish
 		} else {
-			exitSound = successSound
+			exitSound = sounds.Success
 		}
 	}
 
@@ -250,29 +256,25 @@ func main() {
 	os.Exit(exitStatus)
 }
 
-func getConfigDir() *configdir.Config {
-	configDirs := configdir.New("", "ErrorWarner").QueryFolders(configdir.Global)
+func getConfigDir() (configdir.Config, error) {
+	cds := configdir.New("", "ErrorWarner").QueryFolders(configdir.Global)
 
-	if len(configDirs) <= 0 {
-		return nil
+	if len(cds) <= 0 {
+		return configdir.Config{}, errors.New("Unknown Error. Probably not my fault.")
 	}
 
-	configDir := configDirs[0]
-	if !configDir.Exists("") {
-		configDir.MkdirAll()
+	cd := *cds[0]
+	if !cd.Exists("") {
+		err := cd.MkdirAll()
+		if err != nil {
+			return cd, err
+		}
 	}
 
-	return configDir
+	return cd, nil
 }
 
-func initSetting(p, e, w stringFlag, stdout boolFlag) error {
-	setting = defaultSetting
-
-	configDir := getConfigDir()
-	if configDir == nil {
-		return errors.New("Unknown Error. Probably not my fault.")
-	}
-
+func initSetting(p, e, w, s stringFlag, stdout boolFlag) error {
 	var config Config
 
 	if !configDir.Exists(configFileName) {
@@ -311,53 +313,36 @@ func initSetting(p, e, w stringFlag, stdout boolFlag) error {
 		}
 	}
 
-	if setting.ErrorSound == "" {
-		setting.ErrorSound = searchAudioFile(*configDir, "error")
-	} else if !filepath.IsAbs(setting.ErrorSound) {
-		setting.ErrorSound = filepath.Join(configDir.Path, setting.ErrorSound)
-	}
-
-	if setting.WarningSound == "" {
-		setting.WarningSound = searchAudioFile(*configDir, "warn")
-	} else if !filepath.IsAbs(setting.WarningSound) {
-		setting.WarningSound = filepath.Join(configDir.Path, setting.WarningSound)
-	}
-
-	if setting.FinishSound == "" {
-		setting.FinishSound = searchAudioFile(*configDir, "finish")
-	} else if !filepath.IsAbs(setting.FinishSound) {
-		setting.FinishSound = filepath.Join(configDir.Path, setting.FinishSound)
-	}
-
-	if setting.SuccessSound == "" {
-		setting.SuccessSound = searchAudioFile(*configDir, "success")
-	} else if !filepath.IsAbs(setting.SuccessSound) {
-		setting.SuccessSound = filepath.Join(configDir.Path, setting.SuccessSound)
-	}
-
-	if setting.FailureSound == "" {
-		setting.FailureSound = searchAudioFile(*configDir, "fail")
-	} else if !filepath.IsAbs(setting.FailureSound) {
-		setting.FailureSound = filepath.Join(configDir.Path, setting.FailureSound)
-	}
-
 	if e.set {
 		setting.ErrorFormat = e.value
 	}
 	if w.set {
 		setting.WarningFormat = w.value
 	}
+	if s.set {
+		setting.Soundset = s.value
+	}
 	if stdout.set {
 		setting.UseStdout = stdout.value
+	}
+
+	if setting.Soundset != "" && !configDir.Exists(filepath.Join(soundsetsDirName, setting.Soundset)) {
+		return errors.New("Specified soundset not found.")
 	}
 
 	return nil
 }
 
-func searchAudioFile(configDir configdir.Config, basename string) (path string) {
+func searchAudioFile(name string) (path string) {
+	var dir string
+
+	if setting.Soundset != "" {
+		dir = filepath.Join(soundsetsDirName, setting.Soundset)
+	}
+
 	for _, ext := range []string{".wav", ".flac", ".mp3", ".ogg"} {
-		if filename := basename + ext; configDir.Exists(filename) {
-			return filepath.Join(configDir.Path, filename)
+		if relpath := filepath.Join(dir, name+ext); configDir.Exists(relpath) {
+			return filepath.Join(configDir.Path, relpath)
 		}
 	}
 
@@ -389,7 +374,7 @@ func loadAudioFile(path string) (*beep.Buffer, error) {
 	}
 
 	buffer := beep.NewBuffer(format)
-	buffer.Append(beep.Resample(3, f.SampleRate, sampleRate, s))
+	buffer.Append(beep.Resample(3, f.SampleRate, format.SampleRate, s))
 
 	s.Close()
 
