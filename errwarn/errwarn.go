@@ -39,6 +39,7 @@ type Setting struct {
 type soundset struct {
 	Error   *beep.Buffer `file:"error"`
 	Warning *beep.Buffer `file:"warn"`
+	Start   *beep.Buffer `file:"start"`
 	Finish  *beep.Buffer `file:"finish"`
 	Success *beep.Buffer `file:"success"`
 	Failure *beep.Buffer `file:"fail"`
@@ -178,6 +179,13 @@ func main() {
 	}
 
 	// after here, errwarn won't exit or output anything (except for cmd's output) until cmd exits.
+
+	if sounds.Start != nil {
+		playing = make(chan struct{})
+		speaker.Play(beep.Seq(
+			sounds.Start.Streamer(0, sounds.Start.Len()),
+			beep.Callback(func() { close(playing) })))
+	}
 
 	var found bool
 	for scanner.Scan() {
