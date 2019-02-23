@@ -56,8 +56,8 @@ func init() {
 		name := flag.CommandLine.Name()
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", name)
 		fmt.Fprintf(flag.CommandLine.Output(),
-			`  %s [-p <preset>] [-e <regexp>] [-w <regexp>] [-stdout[=true|false]] [--] <cmd>
-  <cmd> | %s [-p <preset>] [-e <regexp>] [-w <regexp>]
+			`  %s [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>] [-stdout[=true|false]] [--] <cmd>
+  <cmd> | %s [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>]
 
 `, name, name)
 		flag.PrintDefaults()
