@@ -1,3 +1,4 @@
+// errwarn warns errors and warns.
 package main
 
 import (
@@ -20,10 +21,12 @@ import (
 	"github.com/shibukawa/configdir"
 )
 
+// Config represents config file.
 type Config struct {
 	Presets map[string]toml.Primitive `toml:"preset"`
 }
 
+// Setting holds current settings.
 type Setting struct {
 	ErrorFormat   string
 	WarningFormat string
@@ -37,8 +40,11 @@ const (
 )
 
 var (
+	// current setting
 	setting Setting
-	format  = beep.Format{
+
+	// output audio format
+	format = beep.Format{
 		NumChannels: 2,
 		Precision:   2,
 		SampleRate:  44100,
@@ -73,6 +79,7 @@ func init() {
 	exitIfErr(err)
 }
 
+// initSetting initialize global setting object using flags and config file.
 func initSetting(p, e, w, s stringFlag, stdout boolFlag) error {
 	var config Config
 
@@ -285,6 +292,7 @@ func main() {
 	os.Exit(exitStatus)
 }
 
+// getConfigDir returns an object of configdir.Config, creating config directory if it not exists.
 func getConfigDir() (configdir.Config, error) {
 	cds := configdir.New("", "ErrorWarner").QueryFolders(configdir.Global)
 
@@ -303,6 +311,7 @@ func getConfigDir() (configdir.Config, error) {
 	return cd, nil
 }
 
+// exitIfErr will terminate errwarn with exit status 1 if error.
 func exitIfErr(err error) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

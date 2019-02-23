@@ -13,6 +13,7 @@ import (
 	"github.com/faiface/beep/wav"
 )
 
+// soundset holds sound data in memory.
 type soundset struct {
 	Error   *beep.Buffer `file:"error"`
 	Warning *beep.Buffer `file:"warn"`
@@ -22,6 +23,8 @@ type soundset struct {
 	Failure *beep.Buffer `file:"fail"`
 }
 
+// load loads sound files in soundset directory of ssName.
+// If ssName is empty, load loook up sound files in root config directory.
 func (s *soundset) load(ssName string) error {
 	if s == nil {
 		return errors.New("Internal error.")
@@ -49,6 +52,10 @@ func (s *soundset) load(ssName string) error {
 	return nil
 }
 
+// searchAudioFile searches a sound file named name in soundset directory of ssName.
+// name should not include extension.
+// .wav, .flac, .mp3 and .ogg files are looked up in this order.
+// If ssName is empty, load loook up sound files in root config directory.
 func searchAudioFile(ssName, name string) (path string) {
 	var dir string
 	cd, _ := getConfigDir()
@@ -66,6 +73,7 @@ func searchAudioFile(ssName, name string) (path string) {
 	return ""
 }
 
+// loadAudioFile loads a sound file of path and return pointer to its buffer.
 func loadAudioFile(path string) (*beep.Buffer, error) {
 	file, err := os.Open(path)
 	if err != nil {
