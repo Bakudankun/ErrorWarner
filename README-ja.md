@@ -61,14 +61,14 @@ errwarn -e error -w warn
 ### ErrorWarnerにコマンドを渡す
 
 ```
-errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>] [-stdout[=true|false]] [--] <cmd>
+errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>] [-stdout[=true|false]] [--] <cmdline>
 ```
 
-ErrorWarnerが`<cmd>`を実行し、その出力を読みます。
+ErrorWarnerが`<cmdline>`を実行し、その出力を読みます。
 
 出力の中に`-e`や`-w`で指定した[正規表現]にマッチする行が出てきたらサウンドを鳴らしてお知らせします。
 
-`errwarn`自身が異常終了しない限り、終了ステータスは`<cmd>`の終了ステータスを返します。
+`errwarn`自身が異常終了しない限り、終了ステータスは`<cmdline>`の終了ステータスを返します。
 
 デフォルトでは標準エラー出力を読みます。ビルドログが標準出力に出てくる場合は`-stdout`を指定してください。
 
@@ -76,14 +76,14 @@ ErrorWarnerが`<cmd>`を実行し、その出力を読みます。
 ### ErrorWarnerにパイプする
 
 ```
-<cmd> | errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>]
+<cmdline> | errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>]
 ```
 
 最初に`errwarn`を書き忘れた場合はパイプさせることもできます。
 
 ただし標準エラー出力はパイプされないので、ビルドログが標準エラー出力に出てくる場合はどうにかしてパイプに流し込む必要があります。
 
-また、この場合`errwarn`は`cmd`の終了ステータスにかかわらず基本的に正常終了することにも注意。
+また、この場合`errwarn`は`cmdline`の終了ステータスにかかわらず基本的に正常終了することにも注意。
 
 
 ### オプション
@@ -107,7 +107,7 @@ ErrorWarnerが`<cmd>`を実行し、その出力を読みます。
 設定例：
 
 ```toml:config.toml
-# 空文字列のプリセットを作るとデフォルト値を変更できる
+# 空文字列のプリセットを作るとデフォルト値として使われる
 [preset.""]
 stdout = true               # 標準エラー出力の代わりに標準出力を読む
 errorFormat = '(?i:error)'  # errorの行にマッチする正規表現
@@ -117,8 +117,6 @@ soundset = 'boyacky'        # サウンドセット
 # `errwarn -p tonzura` でこの設定を呼び出せるようになる
 # 指定していない部分はデフォルト値が引き継がれる
 [preset.tonzura]
-errorFormat = '(?i:error)'
-warningFormat = '(?i:warn)'
 soundset = 'tonzura'
 
 # プリセットの名前をコマンドの名前（拡張子無し）にすると、

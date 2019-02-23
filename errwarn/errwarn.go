@@ -56,8 +56,8 @@ func init() {
 		name := flag.CommandLine.Name()
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", name)
 		fmt.Fprintf(flag.CommandLine.Output(),
-			`  %s [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>] [-stdout[=true|false]] [--] <cmd>
-  <cmd> | %s [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>]
+			`  %s [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>] [-stdout[=true|false]] [--] <cmdline>
+  <cmdline> | %s [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>]
 
 `, name, name)
 		flag.PrintDefaults()
@@ -72,7 +72,7 @@ func init() {
 	flag.Var(&e, "e", "Use `<regexp>` to match errors")
 	flag.Var(&w, "w", "Use `<regexp>` to match warnings")
 	flag.Var(&s, "s", "Use sounds of `<soundset>`")
-	flag.Var(&stdout, "stdout", "Read stdout of cmd instead of stderr")
+	flag.Var(&stdout, "stdout", "Read stdout of cmdline instead of stderr")
 	flag.Parse()
 
 	err = initSetting(p, e, w, s, stdout)
