@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"strings"
 	"syscall"
@@ -17,11 +16,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/faiface/beep"
-	"github.com/faiface/beep/flac"
-	"github.com/faiface/beep/mp3"
 	"github.com/faiface/beep/speaker"
-	"github.com/faiface/beep/vorbis"
-	"github.com/faiface/beep/wav"
 	"github.com/shibukawa/configdir"
 )
 
@@ -36,51 +31,14 @@ type Setting struct {
 	UseStdout     bool `toml:"stdout"`
 }
 
-type soundset struct {
-	Error   *beep.Buffer `file:"error"`
-	Warning *beep.Buffer `file:"warn"`
-	Start   *beep.Buffer `file:"start"`
-	Finish  *beep.Buffer `file:"finish"`
-	Success *beep.Buffer `file:"success"`
-	Failure *beep.Buffer `file:"fail"`
-}
-
-func (s *soundset) load() error {
-	if s == nil {
-		return errors.New("Internal error.")
-	}
-
-	sv := reflect.ValueOf(s).Elem()
-	st := reflect.TypeOf(*s)
-
-	for i := 0; i < st.NumField(); i++ {
-		name := st.Field(i).Tag.Get("file")
-
-		path := searchAudioFile(name)
-		if path == "" {
-			continue
-		}
-
-		b, err := loadAudioFile(path)
-		if err != nil {
-			return err
-		}
-
-		sv.Field(i).Set(reflect.ValueOf(b))
-	}
-
-	return nil
-}
-
 const (
 	configFileName   string = "config.toml"
 	soundsetsDirName string = "soundsets"
 )
 
 var (
-	configDir configdir.Config
-	setting   Setting
-	format    = beep.Format{
+	setting Setting
+	format  = beep.Format{
 		NumChannels: 2,
 		Precision:   2,
 		SampleRate:  44100,
@@ -100,7 +58,6 @@ func init() {
 	}
 
 	var err error
-	configDir, err = getConfigDir()
 	exitIfErr(err)
 
 	var p, e, w, s stringFlag
@@ -116,11 +73,75 @@ func init() {
 	exitIfErr(err)
 }
 
+func initSetting(p, e, w, s stringFlag, stdout boolFlag) error {
+	var config Config
+
+	cd, err := getConfigDir()
+	if err != nil {
+		return err
+	}
+
+	if !cd.Exists(configFileName) {
+		if p.set {
+			return errors.New("Config file not found.")
+		}
+	} else {
+		md, err := toml.DecodeFile(filepath.Join(cd.Path, configFileName), &config)
+		if err != nil {
+			return err
+		}
+
+		// use preset of empty name as default if it exists
+		if prim, ok := config.Presets[""]; ok {
+			err := md.PrimitiveDecode(prim, &setting)
+			if err != nil {
+				return err
+			}
+		}
+
+		if cmd := flag.Arg(0); !p.set && cmd != "" {
+			p.value = strings.TrimSuffix(filepath.Base(cmd), filepath.Ext(cmd))
+		}
+
+		if p.value != "" {
+			if prim, ok := config.Presets[p.value]; !ok {
+				if p.set {
+					return errors.New("Specified preset does not exist.")
+				}
+			} else {
+				err := md.PrimitiveDecode(prim, &setting)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if e.set {
+		setting.ErrorFormat = e.value
+	}
+	if w.set {
+		setting.WarningFormat = w.value
+	}
+	if s.set {
+		setting.Soundset = s.value
+	}
+	if stdout.set {
+		setting.UseStdout = stdout.value
+	}
+
+	if setting.Soundset != "" && !cd.Exists(filepath.Join(soundsetsDirName, setting.Soundset)) {
+		return errors.New("Specified soundset not found.")
+	}
+
+	return nil
+}
+
 func main() {
 	var err error
 	var sounds soundset
 
-	err = sounds.load()
+	err = sounds.load(setting.Soundset)
 	exitIfErr(err)
 
 	err = speaker.Init(format.SampleRate, format.SampleRate.N(50*time.Millisecond))
@@ -280,113 +301,6 @@ func getConfigDir() (configdir.Config, error) {
 	}
 
 	return cd, nil
-}
-
-func initSetting(p, e, w, s stringFlag, stdout boolFlag) error {
-	var config Config
-
-	if !configDir.Exists(configFileName) {
-		if p.set {
-			return errors.New("Config file not found.")
-		}
-	} else {
-		md, err := toml.DecodeFile(filepath.Join(configDir.Path, configFileName), &config)
-		if err != nil {
-			return err
-		}
-
-		// use preset of empty name as default if it exists
-		if prim, ok := config.Presets[""]; ok {
-			err := md.PrimitiveDecode(prim, &setting)
-			if err != nil {
-				return err
-			}
-		}
-
-		if cmd := flag.Arg(0); !p.set && cmd != "" {
-			p.value = strings.TrimSuffix(filepath.Base(cmd), filepath.Ext(cmd))
-		}
-
-		if p.value != "" {
-			if prim, ok := config.Presets[p.value]; !ok {
-				if p.set {
-					return errors.New("Specified preset does not exist.")
-				}
-			} else {
-				err := md.PrimitiveDecode(prim, &setting)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	if e.set {
-		setting.ErrorFormat = e.value
-	}
-	if w.set {
-		setting.WarningFormat = w.value
-	}
-	if s.set {
-		setting.Soundset = s.value
-	}
-	if stdout.set {
-		setting.UseStdout = stdout.value
-	}
-
-	if setting.Soundset != "" && !configDir.Exists(filepath.Join(soundsetsDirName, setting.Soundset)) {
-		return errors.New("Specified soundset not found.")
-	}
-
-	return nil
-}
-
-func searchAudioFile(name string) (path string) {
-	var dir string
-
-	if setting.Soundset != "" {
-		dir = filepath.Join(soundsetsDirName, setting.Soundset)
-	}
-
-	for _, ext := range []string{".wav", ".flac", ".mp3", ".ogg"} {
-		if relpath := filepath.Join(dir, name+ext); configDir.Exists(relpath) {
-			return filepath.Join(configDir.Path, relpath)
-		}
-	}
-
-	return ""
-}
-
-func loadAudioFile(path string) (*beep.Buffer, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var s beep.StreamCloser
-	var f beep.Format
-
-	switch filepath.Ext(path) {
-	case ".wav":
-		s, f, err = wav.Decode(file)
-	case ".mp3":
-		s, f, err = mp3.Decode(file)
-	case ".flac":
-		s, f, err = flac.Decode(file)
-	case ".ogg":
-		s, f, err = vorbis.Decode(file)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	buffer := beep.NewBuffer(format)
-	buffer.Append(beep.Resample(4, f.SampleRate, format.SampleRate, s))
-
-	s.Close()
-
-	return buffer, nil
 }
 
 func exitIfErr(err error) {
