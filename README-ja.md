@@ -4,6 +4,8 @@
 
 ビルド中にerrorやwarningが出てきたときに音で賑やかします。
 
+[デモ](https://twitter.com/Bakudankun/status/1099633393468268544)
+
 
 ## じゅんぼ
 
