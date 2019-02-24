@@ -63,7 +63,7 @@ errwarn -e error -w warn
 ### ErrorWarnerにコマンドを渡す
 
 ```
-errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>] [-stdout[=true|false]] [--] <cmdline>
+errwarn [OPTIONS] [--] <cmdline>
 ```
 
 `errwarn`が`<cmdline>`を実行し、その出力を読みます。
@@ -77,7 +77,7 @@ errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>] [-stdout[=true
 ### ErrorWarnerにパイプする
 
 ```
-<cmdline> | errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>]
+<cmdline> | errwarn [OPTIONS]
 ```
 
 最初に`errwarn`を書き忘れた場合はパイプさせることもできます。

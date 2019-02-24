@@ -50,26 +50,27 @@ are WAV, MP3, FLAC and Ogg Vorbis.
 ```
 $ errwarn -h
 Usage of errwarn:
-  errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>] [-stdout[=true|false]] [--] <cmdline>
-  <cmdline> | errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>]
+  errwarn [OPTIONS] [--] <cmdline>
+  <cmdline> | errwarn [OPTIONS]
 
+OPTIONS
   -e <regexp>
-    	Use <regexp> to match errors
+        Use <regexp> to match errors
   -p <preset>
-    	Use <preset> described in config
+        Use <preset> described in config
   -s <soundset>
-    	Use sounds of <soundset>
+        Use sounds of <soundset>
   -stdout
-    	Read stdout of cmdline instead of stderr
+        Read stdout of given <cmdline> instead of stderr.
   -w <regexp>
-    	Use <regexp> to match warnings
+        Use <regexp> to match warnings
 ```
 
 
 ### Pass a command line to ErrorWarner
 
 ```
-errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>] [-stdout[=true|false]] [--] <cmdline>
+errwarn [OPTIONS] [--] <cmdline>
 ```
 
 `errwarn` executes given `<cmdline>` and reads its output. When a line matches
@@ -84,12 +85,12 @@ logs to standard output.
 ### Read standard input
 
 ```
-<cmdline> | errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>]
+<cmdline> | errwarn [OPTIONS]
 ```
 
 If `<cmdline>` is not given as argument, `errwarn` reads its standard input.
 Note that `errwarn` likely to exit successfully regardless of exit status of
-`<cmdline>`.
+`<cmdline>`. `-stdout` option is ignored in this form.
 
 
 ## Presets
