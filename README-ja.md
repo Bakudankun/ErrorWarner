@@ -1,3 +1,5 @@
+[English version](README.md)
+
 # ErrorWarner
 
 ビルド中にerrorやwarningが出てきたときに音で賑やかします。
@@ -41,7 +43,7 @@ errwarn ""
 Linuxなら`$HOME/.config`の中に`ErrorWarner`フォルダが作成されます。
 そのフォルダの中に`error.wav`や`warn.wav`を置いたり置かなかったりしてください。
 
-ファイル形式はWAV・MP3・FLAC・Ogg Vorbisに対応してるといいな。
+ファイル形式はWAV以外にもMP3・FLAC・Ogg Vorbisにも対応してるといいな。
 
 
 ## つかう
@@ -64,9 +66,8 @@ errwarn -e error -w warn
 errwarn [-p <preset>] [-e <regexp>] [-w <regexp>] [-s <soundset>] [-stdout[=true|false]] [--] <cmdline>
 ```
 
-ErrorWarnerが`<cmdline>`を実行し、その出力を読みます。
-
-出力の中に`-e`や`-w`で指定した[正規表現]にマッチする行が出てきたらサウンドを鳴らしてお知らせします。
+`errwarn`が`<cmdline>`を実行し、その出力を読みます。
+出力の中にオプション`-e`や`-w`で指定した[正規表現]にマッチする行が出てきたらサウンドを鳴らしてお知らせします。
 
 `errwarn`自身が異常終了しない限り、終了ステータスは`<cmdline>`の終了ステータスを返します。
 
@@ -106,18 +107,20 @@ ErrorWarnerが`<cmdline>`を実行し、その出力を読みます。
 
 設定例：
 
-```toml:config.toml
+```toml
 # 空文字列のプリセットを作るとデフォルト値として使われる
 [preset.""]
 stdout = true               # 標準エラー出力の代わりに標準出力を読む
 errorFormat = '(?i:error)'  # errorの行にマッチする正規表現
 warningFormat = '(?i:warn)' # warningの行にマッチする正規表現
-soundset = 'boyacky'        # サウンドセット
+soundset = 'hoge'           # サウンドセット
 
-# `errwarn -p tonzura` でこの設定を呼び出せるようになる
+# `errwarn -p gcc` でこの設定を呼び出せるようになる
 # 指定していない部分はデフォルト値が引き継がれる
-[preset.tonzura]
-soundset = 'tonzura'
+[preset.gcc]
+errorFormat = '^\S+:\d+:\d+: error: '
+warningFormat = '^\S+:\d+:\d+: warning: '
+soundset = 'fuga'
 
 # プリセットの名前をコマンドの名前（拡張子無し）にすると、
 # コマンド渡しで実行したときに自動で選択してくれる
@@ -140,12 +143,12 @@ ErrorWarner
 |-- ...
 |
 +-- soundsets
-    +-- boyacky
+    +-- hoge
     |   |-- error.ogg
     |   |-- warn.ogg
     |   |-- ...
     |
-    +-- tonzura
+    +-- fuga
         |-- error.flac
         |-- warn.flac
         |-- ...
@@ -178,7 +181,7 @@ ErrorWarner
 [MIT](https://github.com/Bakudankun/ErrorWarner/blob/master/LICENSE)
 
 
-Happy Erroring!!
+たのしいエラー生活！！
 
 
 [Oto]: https://github.com/hajimehoshi/oto
