@@ -1,4 +1,4 @@
-[にほんご](README-ja.md)
+[にほんご](https://qiita.com/Bakudankun/items/01d74683b9716dcf45bf)
 
 # ErrorWarner
 
