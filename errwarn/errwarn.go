@@ -23,15 +23,22 @@ import (
 
 // Config represents config file.
 type Config struct {
+	// Presets is a map from string to Settings. They are lazily loaded in
+	// order to "merge" settings in some case.
 	Presets map[string]toml.Primitive `toml:"preset"`
 }
 
-// Setting holds current settings.
+// Setting is set of settings which can be set with config and command line
+// flags.
 type Setting struct {
-	ErrorFormat   string
+	// Regexp to mach errors
+	ErrorFormat string
+	// Regexp to mach warnings
 	WarningFormat string
-	Soundset      string
-	UseStdout     bool `toml:"stdout"`
+	// Soundset
+	Soundset string
+	// Read stdout of given command instead of stderr
+	UseStdout bool `toml:"stdout"`
 }
 
 const (
@@ -40,9 +47,6 @@ const (
 )
 
 var (
-	// current setting
-	setting Setting
-
 	// output audio format
 	format = beep.Format{
 		NumChannels: 2,
@@ -51,102 +55,12 @@ var (
 	}
 )
 
-func init() {
-	flag.Usage = func() {
-		name := filepath.Base(flag.CommandLine.Name())
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", name)
-		fmt.Fprintf(flag.CommandLine.Output(),
-			`  %s [OPTIONS] [--] <cmdline>
-  <cmdline> | %s [OPTIONS]
-
-OPTIONS
-`, name, name)
-		flag.PrintDefaults()
-	}
-
-	var err error
-	exitIfErr(err)
-
-	var p, e, w, s stringFlag
-	var stdout boolFlag
-	flag.Var(&p, "p", "Use `<preset>` described in config")
-	flag.Var(&e, "e", "Use `<regexp>` to match errors")
-	flag.Var(&w, "w", "Use `<regexp>` to match warnings")
-	flag.Var(&s, "s", "Use sounds of `<soundset>`")
-	flag.Var(&stdout, "stdout", "Read stdout of given cmdline instead of stderr.")
-	flag.Parse()
-
-	err = initSetting(p, e, w, s, stdout)
-	exitIfErr(err)
-}
-
-// initSetting initialize global setting object using flags and config file.
-func initSetting(p, e, w, s stringFlag, stdout boolFlag) error {
-	var config Config
-
-	cd, err := getConfigDir()
-	if err != nil {
-		return err
-	}
-
-	if !cd.Exists(configFileName) {
-		if p.set {
-			return errors.New("Config file not found.")
-		}
-	} else {
-		md, err := toml.DecodeFile(filepath.Join(cd.Path, configFileName), &config)
-		if err != nil {
-			return err
-		}
-
-		// use preset of empty name as default if it exists
-		if prim, ok := config.Presets[""]; ok {
-			err := md.PrimitiveDecode(prim, &setting)
-			if err != nil {
-				return err
-			}
-		}
-
-		if cmd := flag.Arg(0); !p.set && cmd != "" {
-			p.value = strings.TrimSuffix(filepath.Base(cmd), filepath.Ext(cmd))
-		}
-
-		if p.value != "" {
-			if prim, ok := config.Presets[p.value]; !ok {
-				if p.set {
-					return errors.New("Specified preset does not exist.")
-				}
-			} else {
-				err := md.PrimitiveDecode(prim, &setting)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	if e.set {
-		setting.ErrorFormat = e.value
-	}
-	if w.set {
-		setting.WarningFormat = w.value
-	}
-	if s.set {
-		setting.Soundset = s.value
-	}
-	if stdout.set {
-		setting.UseStdout = stdout.value
-	}
-
-	if setting.Soundset != "" && !cd.Exists(filepath.Join(soundsetsDirName, setting.Soundset)) {
-		return errors.New("Specified soundset not found.")
-	}
-
-	return nil
-}
-
 func main() {
-	var err error
+	parseFlags()
+
+	setting, err := getSetting()
+	exitIfErr(err)
+
 	var sounds soundset
 
 	err = sounds.load(setting.Soundset)
@@ -207,7 +121,8 @@ func main() {
 		exitIfErr(err)
 	}
 
-	// after here, errwarn won't exit or output anything (except for cmd's output) until cmd exits.
+	// after here, errwarn won't exit or output anything (except for cmd's
+	// output) until cmd exits.
 
 	if sounds.Start != nil {
 		playing = make(chan struct{})
@@ -293,7 +208,104 @@ func main() {
 	os.Exit(exitStatus)
 }
 
-// getConfigDir returns an object of configdir.Config, creating config directory if it not exists.
+// parseFlags defines and parses flags. Flags are stored in flag.CommandLine.
+func parseFlags() {
+	var p, e, w, s stringFlag
+	var stdout boolFlag
+	flag.Usage = func() {
+		name := filepath.Base(flag.CommandLine.Name())
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", name)
+		fmt.Fprintf(flag.CommandLine.Output(),
+			`  %s [OPTIONS] [--] <cmdline>
+  <cmdline> | %s [OPTIONS]
+
+OPTIONS
+`, name, name)
+		flag.PrintDefaults()
+	}
+
+	flag.Var(&p, "p", "Use `<preset>` described in config")
+	flag.Var(&e, "e", "Use `<regexp>` to match errors")
+	flag.Var(&w, "w", "Use `<regexp>` to match warnings")
+	flag.Var(&s, "s", "Use sounds of `<soundset>`")
+	flag.Var(&stdout, "stdout", "Read stdout of given cmdline instead of stderr.")
+	flag.Parse()
+}
+
+// getSetting determines intended setting using flags and config file.
+func getSetting() (setting Setting, err error) {
+	// Retrieve flags from flag.CommandLine. These type assersions must be met.
+	p := flag.Lookup("p").Value.(*stringFlag)
+	e := flag.Lookup("e").Value.(*stringFlag)
+	w := flag.Lookup("w").Value.(*stringFlag)
+	s := flag.Lookup("s").Value.(*stringFlag)
+	stdout := flag.Lookup("stdout").Value.(*boolFlag)
+
+	var config Config
+
+	cd, err := getConfigDir()
+	if err != nil {
+		return Setting{}, err
+	}
+
+	if !cd.Exists(configFileName) {
+		if p.set {
+			return Setting{}, errors.New("Config file not found.")
+		}
+	} else {
+		md, err := toml.DecodeFile(filepath.Join(cd.Path, configFileName), &config)
+		if err != nil {
+			return Setting{}, err
+		}
+
+		// use preset of empty name as default if it exists
+		if prim, ok := config.Presets[""]; ok {
+			err := md.PrimitiveDecode(prim, &setting)
+			if err != nil {
+				return Setting{}, err
+			}
+		}
+
+		if cmd := flag.Arg(0); !p.set && cmd != "" {
+			p.value = strings.TrimSuffix(filepath.Base(cmd), filepath.Ext(cmd))
+		}
+
+		if p.value != "" {
+			if prim, ok := config.Presets[p.value]; !ok {
+				if p.set {
+					return Setting{}, errors.New("Specified preset does not exist.")
+				}
+			} else {
+				err := md.PrimitiveDecode(prim, &setting)
+				if err != nil {
+					return Setting{}, err
+				}
+			}
+		}
+	}
+
+	if e.set {
+		setting.ErrorFormat = e.value
+	}
+	if w.set {
+		setting.WarningFormat = w.value
+	}
+	if s.set {
+		setting.Soundset = s.value
+	}
+	if stdout.set {
+		setting.UseStdout = stdout.value
+	}
+
+	if setting.Soundset != "" && !cd.Exists(filepath.Join(soundsetsDirName, setting.Soundset)) {
+		return Setting{}, errors.New("Specified soundset not found.")
+	}
+
+	return setting, nil
+}
+
+// getConfigDir returns an object of configdir.Config, creating config
+// directory if it does not exist.
 func getConfigDir() (configdir.Config, error) {
 	cds := configdir.New("", "ErrorWarner").QueryFolders(configdir.Global)
 
