@@ -77,7 +77,7 @@ errwarn [OPTIONS] [--] <cmdline>
 
 `errwarn` executes given `<cmdline>` and reads its output. When a line matches
 the [regular expressions][Go-Regexp] specified with `-e` or `-w`, ErrorWarner
-notify you with sound. The exit status will be the same with that of
+notifies you with sound. The exit status will be the same with that of
 `<cmdline>` unless `errwarn` itself throws an error.
 
 `errwarn` reads standard error by default. Set `-stdout` if `<cmdline>` writes
@@ -101,6 +101,9 @@ To reuse regular expressions, you can create presets to switch with `-p` option
 by writing `config.toml` file in ErrorWarner directory created
 [above](#place-sound-files).
 
+If a preset name matches executing command's name (extension trimmed), the
+preset will be selected automatically.
+
 Example of config.toml:
 
 ```toml
@@ -111,14 +114,14 @@ errorFormat = '(?i:error)'  # regexp to mach errors
 warningFormat = '(?i:warn)' # regexp to mach warnings
 soundset = 'foo'            # soundset
 
-# call this preset like `errwarn -p gcc`
+# call this preset like `errwarn -p gcc make`
 [preset.gcc]
+stdout = false
 errorFormat = '^\S+:\d+:\d+: error: '
 warningFormat = '^\S+:\d+:\d+: warning: '
 soundset = 'bar'
 
-# If preset name matches the executing command's name (extension trimmed), the
-# preset is selected automatically.
+# automatically selected when you execute `errwarn go build`
 [preset.go]
 stdout = false
 errorFormat = '^.*: '
@@ -151,10 +154,13 @@ ErrorWarner
 ```
 
 Soundsets can be specified with `-s` option or `soundset` param in config. If
-none or empty name is specified, sound files right under ErrorWarner directory
-will be used.
+none or empty name is specified, Sound files right under the ErrorWarner
+directory will be used.
 
-Sound files of following names are used.
+
+## Sounds
+
+ErrorWarner uses sound files of following names.
 
 * `error.*`  
   Played when a error is found.
@@ -164,7 +170,7 @@ Sound files of following names are used.
   Played on given command's starting.
 * `finish.*`  
   Played if given command exited successfully though some errors or warnings
-  found. If errwarn is reading its stdin, this always be played on exit.
+  were found. If errwarn is reading its stdin, this always be played on exit.
 * `success.*`  
   Played if given command exited successfully with no errors or warnings. Not
   used if errwarn is reading its stdin.

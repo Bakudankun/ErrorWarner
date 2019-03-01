@@ -24,7 +24,7 @@ type soundset struct {
 }
 
 // load loads sound files in soundset directory of ssName.
-// If ssName is empty, load loook up sound files in root config directory.
+// If ssName is empty, load loads sound files right under the config directory.
 func (s *soundset) load(ssName string) error {
 	if s == nil {
 		return errors.New("Internal error.")
@@ -52,10 +52,11 @@ func (s *soundset) load(ssName string) error {
 	return nil
 }
 
-// searchAudioFile searches a sound file named name in soundset directory of ssName.
-// name should not include extension.
-// .wav, .flac, .mp3 and .ogg files are looked up in this order.
-// If ssName is empty, load loook up sound files in root config directory.
+// searchAudioFile searches a sound file named name in soundset directory of
+// ssName. name should not include extension.
+// `*.wav`, `*.flac`, `*.mp3` and `*.ogg` files are searched in this order.
+// If ssName is empty, searchAudioFile searches right under the config
+// directory.
 func searchAudioFile(ssName, name string) (path string) {
 	var dir string
 	cd, _ := getConfigDir()

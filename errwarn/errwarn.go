@@ -28,7 +28,7 @@ type Config struct {
 	Presets map[string]toml.Primitive `toml:"preset"`
 }
 
-// Setting is set of settings which can be set with config and command line
+// Setting is a set of settings which can be set with config and command line
 // flags.
 type Setting struct {
 	// Regexp to mach errors
