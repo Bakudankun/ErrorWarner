@@ -86,21 +86,19 @@ func main() {
 
 	if cmd == nil {
 		input = io.TeeReader(os.Stdin, os.Stdout)
-		err = nil
 	} else if setting.UseStdout {
 		cmd.Stdin = os.Stdin
 		cmd.Stderr = os.Stderr
-		var stdout io.Reader
-		stdout, err = cmd.StdoutPipe()
+		stdout, err := cmd.StdoutPipe()
+		exitIfErr(err)
 		input = io.TeeReader(stdout, os.Stdout)
 	} else {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
-		var stderr io.Reader
-		stderr, err = cmd.StderrPipe()
+		stderr, err := cmd.StderrPipe()
+		exitIfErr(err)
 		input = io.TeeReader(stderr, os.Stderr)
 	}
-	exitIfErr(err)
 
 	var matcherErr, matcherWarn *regexp.Regexp
 	if setting.ErrorFormat != "" {
@@ -114,6 +112,7 @@ func main() {
 
 	playing := make(chan struct{})
 	close(playing)
+
 	scanner := bufio.NewScanner(input)
 
 	if cmd != nil {
@@ -125,10 +124,7 @@ func main() {
 	// output) until cmd exits.
 
 	if sounds.Start != nil {
-		playing = make(chan struct{})
-		speaker.Play(beep.Seq(
-			sounds.Start.Streamer(0, sounds.Start.Len()),
-			beep.Callback(func() { close(playing) })))
+		playing = playSound(sounds.Start)
 	}
 
 	var found bool
@@ -154,12 +150,7 @@ func main() {
 		}
 
 		found = true
-		speaker.Clear()
-
-		playing = make(chan struct{})
-		speaker.Play(beep.Seq(
-			newSound.Streamer(0, newSound.Len()),
-			beep.Callback(func() { close(playing) })))
+		playing = playSound(newSound)
 
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -195,12 +186,7 @@ func main() {
 	}
 
 	if exitSound != nil {
-		speaker.Clear()
-
-		playing = make(chan struct{})
-		speaker.Play(beep.Seq(
-			exitSound.Streamer(0, exitSound.Len()),
-			beep.Callback(func() { close(playing) })))
+		playing = playSound(exitSound)
 	}
 
 	<-playing
@@ -322,6 +308,19 @@ func getConfigDir() (configdir.Config, error) {
 	}
 
 	return cd, nil
+}
+
+// playSound begins playing given sound and returns a channel which closes at
+// the end of the sound.
+func playSound(sound *beep.Buffer) chan struct{} {
+	playing := make(chan struct{})
+
+	speaker.Clear()
+	speaker.Play(beep.Seq(
+		sound.Streamer(0, sound.Len()),
+		beep.Callback(func() { close(playing) })))
+
+	return playing
 }
 
 // exitIfErr will terminate errwarn with exit status 1 if error.
