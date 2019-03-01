@@ -134,6 +134,12 @@ func main() {
 		isErr := matcherErr != nil && matcherErr.MatchString(line)
 		isWarn := matcherWarn != nil && matcherWarn.MatchString(line)
 
+		if !isErr && !isWarn {
+			continue
+		}
+
+		found = true
+
 		var newSound *beep.Buffer
 
 		switch {
@@ -149,7 +155,6 @@ func main() {
 			continue
 		}
 
-		found = true
 		playing = playSound(newSound)
 
 		time.Sleep(50 * time.Millisecond)
