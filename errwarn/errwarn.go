@@ -110,8 +110,7 @@ func main() {
 		exitIfErr(err)
 	}
 
-	playing := make(chan struct{})
-	close(playing)
+	playQueue, playerEnd := startPlayer()
 
 	scanner := bufio.NewScanner(input)
 
@@ -123,9 +122,7 @@ func main() {
 	// after here, errwarn won't exit or output anything (except for cmd's
 	// output) until cmd exits.
 
-	if sounds.Start != nil {
-		playing = playSound(sounds.Start)
-	}
+	playQueue <- sounds.Start
 
 	var found bool
 	for scanner.Scan() {
@@ -151,13 +148,7 @@ func main() {
 			newSound = nil
 		}
 
-		if newSound == nil {
-			continue
-		}
-
-		playing = playSound(newSound)
-
-		time.Sleep(50 * time.Millisecond)
+		playQueue <- newSound
 	}
 
 	var exitStatus int
@@ -190,11 +181,10 @@ func main() {
 		}
 	}
 
-	if exitSound != nil {
-		playing = playSound(exitSound)
-	}
+	playQueue <- exitSound
 
-	<-playing
+	close(playQueue)
+	<-playerEnd
 
 	os.Exit(exitStatus)
 }
@@ -313,6 +303,35 @@ func getConfigDir() (configdir.Config, error) {
 	}
 
 	return cd, nil
+}
+
+// startPlayer starts a goroutine which plays sounds that are queued through
+// returned send-only channel. Returned receive-only channel will be closed on
+// the last sound's end after the queue channel has been closed. nil sounds
+// will be ignored.
+func startPlayer() (chan<- *beep.Buffer, <-chan struct{}) {
+	queue := make(chan *beep.Buffer, 16)
+	end := make(chan struct{})
+
+	go func() {
+		playing := make(chan struct{})
+		close(playing)
+
+		for sound := range queue {
+			if sound == nil {
+				continue
+			}
+
+			playing = playSound(sound)
+
+			time.Sleep(50 * time.Millisecond)
+		}
+
+		<-playing
+		close(end)
+	}()
+
+	return queue, end
 }
 
 // playSound begins playing given sound and returns a channel which closes at
