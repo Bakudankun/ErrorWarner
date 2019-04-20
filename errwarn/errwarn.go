@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -163,11 +162,8 @@ func main() {
 		} else if exitErr, ok := err.(*exec.ExitError); !ok {
 			fmt.Fprintln(os.Stderr, err)
 			exitStatus = 1
-		} else if status, ok := exitErr.Sys().(syscall.WaitStatus); !ok {
-			fmt.Fprintln(os.Stderr, err)
-			exitStatus = 1
 		} else {
-			exitStatus = status.ExitStatus()
+			exitStatus = exitErr.ExitCode()
 		}
 
 		if exitStatus != 0 {
