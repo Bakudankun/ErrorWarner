@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -23,16 +22,12 @@ type soundset struct {
 	Failure *beep.Buffer `file:"fail"`
 }
 
-// load loads sound files in soundset directory of ssName.
-// If ssName is empty, load loads sound files right under the config directory.
-func (s *soundset) load(ssName string) error {
-	if s == nil {
-		return errors.New("Internal error.")
-	}
-
-	sv := reflect.ValueOf(s).Elem()
-	st := reflect.TypeOf(*s)
-
+// loadSounds loads sound files in soundset directory of ssName. If ssName is
+// empty, loadSounds loads sound files right under the config directory.
+func loadSounds(ssName string) (s soundset, err error) {
+	// Iterate for members of soundset
+	sv := reflect.ValueOf(&s).Elem()
+	st := reflect.TypeOf(s)
 	for i := 0; i < st.NumField(); i++ {
 		name := st.Field(i).Tag.Get("file")
 
@@ -43,13 +38,13 @@ func (s *soundset) load(ssName string) error {
 
 		b, err := loadAudioFile(path)
 		if err != nil {
-			return err
+			return soundset{}, err
 		}
 
 		sv.Field(i).Set(reflect.ValueOf(b))
 	}
 
-	return nil
+	return s, nil
 }
 
 // searchAudioFile searches a sound file named name in soundset directory of

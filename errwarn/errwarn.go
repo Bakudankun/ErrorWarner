@@ -61,9 +61,7 @@ func main() {
 	setting, err := getSetting()
 	exitIfErr(err)
 
-	var sounds soundset
-
-	err = sounds.load(setting.Soundset)
+	sounds, err := loadSounds(setting.Soundset)
 	exitIfErr(err)
 
 	err = speaker.Init(format.SampleRate, format.SampleRate.N(50*time.Millisecond))
