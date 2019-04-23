@@ -46,6 +46,12 @@ const (
 )
 
 var (
+	// flags specified with command line
+	cmdFlags = struct {
+		p, e, w, s stringFlag
+		stdout     boolFlag
+	}{}
+
 	// output audio format
 	format = beep.Format{
 		NumChannels: 2,
@@ -185,8 +191,6 @@ func main() {
 
 // parseFlags defines and parses flags. Flags are stored in flag.CommandLine.
 func parseFlags() {
-	var p, e, w, s stringFlag
-	var stdout boolFlag
 	flag.Usage = func() {
 		name := filepath.Base(flag.CommandLine.Name())
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", name)
@@ -199,23 +203,16 @@ OPTIONS
 		flag.PrintDefaults()
 	}
 
-	flag.Var(&p, "p", "Use `<preset>` described in config")
-	flag.Var(&e, "e", "Use `<regexp>` to match errors")
-	flag.Var(&w, "w", "Use `<regexp>` to match warnings")
-	flag.Var(&s, "s", "Use sounds of `<soundset>`")
-	flag.Var(&stdout, "stdout", "Read stdout of given cmdline instead of stderr.")
+	flag.Var(&cmdFlags.p, "p", "Use `<preset>` described in config")
+	flag.Var(&cmdFlags.e, "e", "Use `<regexp>` to match errors")
+	flag.Var(&cmdFlags.w, "w", "Use `<regexp>` to match warnings")
+	flag.Var(&cmdFlags.s, "s", "Use sounds of `<soundset>`")
+	flag.Var(&cmdFlags.stdout, "stdout", "Read stdout of given cmdline instead of stderr.")
 	flag.Parse()
 }
 
 // getSetting determines intended setting using flags and config file.
 func getSetting() (setting Setting, err error) {
-	// Retrieve flags from flag.CommandLine. These type assersions must be met.
-	p := flag.Lookup("p").Value.(*stringFlag)
-	e := flag.Lookup("e").Value.(*stringFlag)
-	w := flag.Lookup("w").Value.(*stringFlag)
-	s := flag.Lookup("s").Value.(*stringFlag)
-	stdout := flag.Lookup("stdout").Value.(*boolFlag)
-
 	var config Config
 
 	cd, err := getConfigDir()
@@ -224,7 +221,7 @@ func getSetting() (setting Setting, err error) {
 	}
 
 	if !cd.Exists(configFileName) {
-		if p.set {
+		if cmdFlags.p.set {
 			return Setting{}, errors.New("Config file not found.")
 		}
 	} else {
@@ -241,13 +238,13 @@ func getSetting() (setting Setting, err error) {
 			}
 		}
 
-		if cmd := flag.Arg(0); !p.set && cmd != "" {
-			p.value = strings.TrimSuffix(filepath.Base(cmd), filepath.Ext(cmd))
+		if cmd := flag.Arg(0); !cmdFlags.p.set && cmd != "" {
+			cmdFlags.p.value = strings.TrimSuffix(filepath.Base(cmd), filepath.Ext(cmd))
 		}
 
-		if p.value != "" {
-			if prim, ok := config.Presets[p.value]; !ok {
-				if p.set {
+		if cmdFlags.p.value != "" {
+			if prim, ok := config.Presets[cmdFlags.p.value]; !ok {
+				if cmdFlags.p.set {
 					return Setting{}, errors.New("Specified preset does not exist.")
 				}
 			} else {
@@ -259,17 +256,17 @@ func getSetting() (setting Setting, err error) {
 		}
 	}
 
-	if e.set {
-		setting.ErrorFormat = e.value
+	if cmdFlags.e.set {
+		setting.ErrorFormat = cmdFlags.e.value
 	}
-	if w.set {
-		setting.WarningFormat = w.value
+	if cmdFlags.w.set {
+		setting.WarningFormat = cmdFlags.w.value
 	}
-	if s.set {
-		setting.Soundset = s.value
+	if cmdFlags.s.set {
+		setting.Soundset = cmdFlags.s.value
 	}
-	if stdout.set {
-		setting.UseStdout = stdout.value
+	if cmdFlags.stdout.set {
+		setting.UseStdout = cmdFlags.stdout.value
 	}
 
 	if setting.Soundset != "" && !cd.Exists(filepath.Join(soundsetsDirName, setting.Soundset)) {
