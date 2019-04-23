@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/faiface/beep"
 	"github.com/faiface/beep/flac"
 	"github.com/faiface/beep/mp3"
@@ -28,20 +30,30 @@ func loadSounds(ssName string) (s soundset, err error) {
 	// Iterate for members of soundset
 	sv := reflect.ValueOf(&s).Elem()
 	st := reflect.TypeOf(s)
+
+	var eg errgroup.Group
 	for i := 0; i < st.NumField(); i++ {
-		name := st.Field(i).Tag.Get("file")
+		i := i
+		eg.Go(func() error {
+			name := st.Field(i).Tag.Get("file")
 
-		path := searchAudioFile(ssName, name)
-		if path == "" {
-			continue
-		}
+			path := searchAudioFile(ssName, name)
+			if path == "" {
+				return nil
+			}
 
-		b, err := loadAudioFile(path)
-		if err != nil {
-			return soundset{}, err
-		}
+			b, err := loadAudioFile(path)
+			if err != nil {
+				return err
+			}
 
-		sv.Field(i).Set(reflect.ValueOf(b))
+			sv.Field(i).Set(reflect.ValueOf(b))
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		return soundset{}, err
 	}
 
 	return s, nil
