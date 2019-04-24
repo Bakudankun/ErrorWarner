@@ -22,9 +22,19 @@ import (
 
 // Config represents config file.
 type Config struct {
+	// Audio configuration
+	Audio AudioConfig
+
 	// Presets is a map from string to Settings. They are lazily loaded in
 	// order to "merge" settings in some case.
 	Presets map[string]toml.Primitive `toml:"preset"`
+}
+
+type AudioConfig struct {
+	// BufferSize in samples
+	BufferSize int
+	// MinPlayLength in milliseconds
+	MinPlayLength int
 }
 
 // Setting is a set of settings which can be set with config and command line
@@ -46,6 +56,13 @@ const (
 )
 
 var (
+	config = Config{
+		Audio: AudioConfig{
+			BufferSize:    2048,
+			MinPlayLength: 50,
+		},
+	}
+
 	// flags specified with command line
 	cmdFlags = struct {
 		p, e, w, s stringFlag
@@ -69,7 +86,7 @@ func main() {
 	sounds, err := loadSounds(setting.Soundset)
 	exitIfErr(err)
 
-	err = speaker.Init(format.SampleRate, format.SampleRate.N(50*time.Millisecond))
+	err = speaker.Init(format.SampleRate, config.Audio.BufferSize)
 	exitIfErr(err)
 
 	var cmd *exec.Cmd
@@ -213,8 +230,6 @@ OPTIONS
 
 // getSetting determines intended setting using flags and config file.
 func getSetting() (setting Setting, err error) {
-	var config Config
-
 	cd, err := getConfigDir()
 	if err != nil {
 		return Setting{}, err
@@ -254,6 +269,10 @@ func getSetting() (setting Setting, err error) {
 				}
 			}
 		}
+	}
+
+	if config.Audio.BufferSize <= 0 {
+		config.Audio.BufferSize = 2048
 	}
 
 	if cmdFlags.e.set {
@@ -315,7 +334,7 @@ func startPlayer() (chan<- *beep.Buffer, <-chan struct{}) {
 
 			playing = playSound(sound)
 
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(time.Duration(config.Audio.MinPlayLength) * time.Millisecond)
 		}
 
 		<-playing
