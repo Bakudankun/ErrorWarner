@@ -17,7 +17,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/faiface/beep"
 	"github.com/faiface/beep/speaker"
-	"github.com/shibukawa/configdir"
+	"github.com/uinta-labs/configdir"
 )
 
 // Config represents config file.
@@ -298,7 +298,7 @@ func getSetting() (setting Setting, err error) {
 // getConfigDir returns an object of configdir.Config, creating config
 // directory if it does not exist.
 func getConfigDir() (configdir.Config, error) {
-	cds := configdir.New("", "ErrorWarner").QueryFolders(configdir.Global)
+	cds := configdir.New("", "ErrorWarner").QueryFolders(configdir.User)
 
 	if len(cds) <= 0 {
 		return configdir.Config{}, errors.New("Unknown Error. Probably not my fault.")
