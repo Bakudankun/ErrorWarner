@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/faiface/beep"
-	"github.com/faiface/beep/speaker"
+	"github.com/gopxl/beep/v2"
+	"github.com/gopxl/beep/v2/speaker"
 	"github.com/uinta-labs/configdir"
 )
 
